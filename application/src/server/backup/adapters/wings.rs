@@ -1307,9 +1307,9 @@ impl BackupBrowseExt for BrowseWingsBackup {
                 let size = archive.by_name(&path.to_string_lossy())?.size();
                 let (reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
 
-                tokio::task::spawn_blocking(move || {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let runtime = tokio::runtime::Handle::current();
-                    let mut entry = archive.by_name(&path.to_string_lossy()).unwrap();
+                    let mut entry = archive.by_name(&path.to_string_lossy())?;
 
                     let mut buffer = vec![0; crate::BUFFER_SIZE];
                     loop {
@@ -1326,6 +1326,8 @@ impl BackupBrowseExt for BrowseWingsBackup {
                             }
                         }
                     }
+
+                    Ok(())
                 });
 
                 let mut headers = HeaderMap::new();
@@ -1349,7 +1351,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                 };
                 let (file_reader, mut file_writer) = tokio::io::duplex(crate::BUFFER_SIZE);
 
-                tokio::task::spawn_blocking(move || {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let runtime = tokio::runtime::Handle::current();
 
                     if let Some(block_index) = archive.stream_map.file_block_index[entry_index] {
@@ -1362,41 +1364,38 @@ impl BackupBrowseExt for BrowseWingsBackup {
                             &mut reader,
                         );
 
-                        folder
-                            .for_each_entries(&mut |entry, reader| {
-                                let entry_path = Path::new(entry.name());
-                                if entry_path != path {
-                                    std::io::copy(reader, &mut std::io::sink())?;
+                        folder.for_each_entries(&mut |entry, reader| {
+                            let entry_path = Path::new(entry.name());
+                            if entry_path != path {
+                                std::io::copy(reader, &mut std::io::sink())?;
 
-                                    return Ok(true);
-                                }
+                                return Ok(true);
+                            }
 
-                                let mut buffer = vec![0; crate::BUFFER_SIZE];
-                                loop {
-                                    match reader.read(&mut buffer) {
-                                        Ok(0) => break,
-                                        Ok(n) => {
-                                            if runtime
-                                                .block_on(file_writer.write_all(&buffer[..n]))
-                                                .is_err()
-                                            {
-                                                break;
-                                            }
-                                        }
-                                        Err(err) => {
-                                            tracing::error!(
-                                                "error reading from 7z entry: {:#?}",
-                                                err
-                                            );
+                            let mut buffer = vec![0; crate::BUFFER_SIZE];
+                            loop {
+                                match reader.read(&mut buffer) {
+                                    Ok(0) => break,
+                                    Ok(n) => {
+                                        if runtime
+                                            .block_on(file_writer.write_all(&buffer[..n]))
+                                            .is_err()
+                                        {
                                             break;
                                         }
                                     }
+                                    Err(err) => {
+                                        tracing::error!("error reading from 7z entry: {:#?}", err);
+                                        break;
+                                    }
                                 }
+                            }
 
-                                Ok(true)
-                            })
-                            .unwrap_or_default();
+                            Ok(true)
+                        })?;
                     };
+
+                    Ok(())
                 });
 
                 let mut headers = HeaderMap::new();
@@ -1426,7 +1425,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
         match archive {
             BrowseWingsBackupArchive::Zip { mut archive, .. } => match archive_format {
                 StreamableArchiveFormat::Zip => {
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let writer = tokio_util::io::SyncIoBridge::new(writer);
                         let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -1470,7 +1469,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                         self.server.app_state.config.api.file_compression_threads,
                     );
 
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let mut tar = tar::Builder::new(writer);
                         tar.mode(tar::HeaderMode::Complete);
 
@@ -1537,7 +1536,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                 ..
             } => match archive_format {
                 StreamableArchiveFormat::Zip => {
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let writer = tokio_util::io::SyncIoBridge::new(writer);
                         let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -1626,7 +1625,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                         self.server.app_state.config.api.file_compression_threads,
                     );
 
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let mut tar = tar::Builder::new(writer);
                         tar.mode(tar::HeaderMode::Complete);
 
@@ -1720,7 +1719,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
             BrowseWingsBackupArchive::Zip { mut archive, .. } => {
                 match archive_format {
                     StreamableArchiveFormat::Zip => {
-                        tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                        crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                             let writer = tokio_util::io::SyncIoBridge::new(writer);
                             let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -1768,7 +1767,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                             self.server.app_state.config.api.file_compression_threads,
                         );
 
-                        tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                        crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                             let mut tar = tar::Builder::new(writer);
                             tar.mode(tar::HeaderMode::Complete);
 
@@ -1835,7 +1834,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                 ..
             } => match archive_format {
                 StreamableArchiveFormat::Zip => {
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let writer = tokio_util::io::SyncIoBridge::new(writer);
                         let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -1928,7 +1927,7 @@ impl BackupBrowseExt for BrowseWingsBackup {
                         self.server.app_state.config.api.file_compression_threads,
                     );
 
-                    tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                    crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                         let mut tar = tar::Builder::new(writer);
                         tar.mode(tar::HeaderMode::Complete);
 

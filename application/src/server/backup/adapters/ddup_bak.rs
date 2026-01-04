@@ -408,7 +408,7 @@ impl BackupExt for DdupBakBackup {
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
                     let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -435,7 +435,7 @@ impl BackupExt for DdupBakBackup {
                     config.api.file_compression_threads,
                 );
 
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let mut tar = tar::Builder::new(writer);
                     tar.mode(tar::HeaderMode::Complete);
 
@@ -915,7 +915,7 @@ impl BackupBrowseExt for BrowseDdupBakBackup {
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
                     let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -972,7 +972,7 @@ impl BackupBrowseExt for BrowseDdupBakBackup {
                     self.server.app_state.config.api.file_compression_threads,
                 );
 
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let mut tar = tar::Builder::new(writer);
                     tar.mode(tar::HeaderMode::Complete);
 
@@ -1055,7 +1055,7 @@ impl BackupBrowseExt for BrowseDdupBakBackup {
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
                     let mut zip = zip::ZipWriter::new_stream(writer);
 
@@ -1088,7 +1088,7 @@ impl BackupBrowseExt for BrowseDdupBakBackup {
                     self.server.app_state.config.api.file_compression_threads,
                 );
 
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let mut tar = tar::Builder::new(writer);
                     tar.mode(tar::HeaderMode::Complete);
 

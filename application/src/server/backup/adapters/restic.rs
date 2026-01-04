@@ -578,7 +578,7 @@ impl BackupExt for ResticBackup {
                     .stderr(std::process::Stdio::null())
                     .spawn()?;
 
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
                     let mut archive = zip::ZipWriter::new_stream(writer);
 
@@ -642,7 +642,7 @@ impl BackupExt for ResticBackup {
                     .spawn()?;
 
                 let file_compression_threads = self.config.api.file_compression_threads;
-                tokio::task::spawn_blocking(move || {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let mut writer = CompressionWriter::new(
                         tokio_util::io::SyncIoBridge::new(writer),
                         archive_format.compression_format(),
@@ -657,7 +657,9 @@ impl BackupExt for ResticBackup {
                         );
                     }
 
-                    writer.finish().ok();
+                    writer.finish()?;
+
+                    Ok(())
                 });
             }
         }
@@ -1020,7 +1022,7 @@ impl BackupBrowseExt for BrowseResticBackup {
                     .stderr(std::process::Stdio::null())
                     .spawn()?;
 
-                tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
                     let mut archive = zip::ZipWriter::new_stream(writer);
 
@@ -1088,7 +1090,7 @@ impl BackupBrowseExt for BrowseResticBackup {
 
                 let file_compression_threads =
                     self.server.app_state.config.api.file_compression_threads;
-                tokio::task::spawn_blocking(move || {
+                crate::spawn_blocking_handled(move || -> Result<(), anyhow::Error> {
                     let mut writer = CompressionWriter::new(
                         tokio_util::io::SyncIoBridge::new(writer),
                         archive_format.compression_format(),
@@ -1103,9 +1105,10 @@ impl BackupBrowseExt for BrowseResticBackup {
                         );
                     }
 
-                    if let Ok(mut inner) = writer.finish() {
-                        inner.flush().ok();
-                    }
+                    let mut inner = writer.finish()?;
+                    inner.flush()?;
+
+                    Ok(())
                 });
             }
         }
@@ -1148,7 +1151,7 @@ impl BackupBrowseExt for BrowseResticBackup {
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
-                tokio::task::spawn_blocking({
+                crate::spawn_blocking_handled({
                     let short_id = self.short_id.clone();
                     let configuration = Arc::clone(&self.configuration);
                     let entries = Arc::clone(&self.entries);
@@ -1191,7 +1194,7 @@ impl BackupBrowseExt for BrowseResticBackup {
                                 ResticEntryType::Dir => {
                                     archive.add_directory(relative.to_string_lossy(), options)?;
 
-                                    let child = match std::process::Command::new("restic")
+                                    let child = std::process::Command::new("restic")
                                         .envs(&configuration.environment)
                                         .arg("--json")
                                         .arg("--no-lock")
@@ -1203,17 +1206,10 @@ impl BackupBrowseExt for BrowseResticBackup {
                                         .arg("/")
                                         .stdout(std::process::Stdio::piped())
                                         .stderr(std::process::Stdio::null())
-                                        .spawn()
-                                    {
-                                        Ok(child) => child,
-                                        Err(_) => continue,
-                                    };
+                                        .spawn()?;
 
                                     let mut subtar = tar::Archive::new(child.stdout.unwrap());
-                                    let mut entries = match subtar.entries() {
-                                        Ok(entries) => entries,
-                                        Err(_) => continue,
-                                    };
+                                    let mut entries = subtar.entries()?;
 
                                     let mut read_buffer = vec![0; crate::BUFFER_SIZE];
                                     while let Some(Ok(mut entry)) = entries.next() {
@@ -1299,14 +1295,14 @@ impl BackupBrowseExt for BrowseResticBackup {
                 });
             }
             _ => {
-                tokio::task::spawn_blocking({
+                crate::spawn_blocking_handled({
                     let file_compression_threads =
                         self.server.app_state.config.api.file_compression_threads;
                     let short_id = self.short_id.clone();
                     let configuration = Arc::clone(&self.configuration);
                     let entries = Arc::clone(&self.entries);
 
-                    move || {
+                    move || -> Result<(), anyhow::Error> {
                         let writer = CompressionWriter::new(
                             tokio_util::io::SyncIoBridge::new(writer),
                             archive_format.compression_format(),
@@ -1336,53 +1332,40 @@ impl BackupBrowseExt for BrowseResticBackup {
                                 ResticEntryType::Dir => {
                                     header.set_entry_type(tar::EntryType::Directory);
 
-                                    if archive
-                                        .append_data(&mut header, relative, std::io::empty())
-                                        .is_ok()
-                                    {
-                                        let child = match std::process::Command::new("restic")
-                                            .envs(&configuration.environment)
-                                            .arg("--json")
-                                            .arg("--no-lock")
-                                            .arg("--repo")
-                                            .arg(&configuration.repository)
-                                            .args(configuration.password())
-                                            .arg("dump")
-                                            .arg(format!("{}:{}", short_id, path.display()))
-                                            .arg("/")
-                                            .stdout(std::process::Stdio::piped())
-                                            .stderr(std::process::Stdio::null())
-                                            .spawn()
-                                        {
-                                            Ok(child) => child,
-                                            Err(_) => continue,
-                                        };
+                                    archive.append_data(&mut header, relative, std::io::empty())?;
 
-                                        let mut subtar = tar::Archive::new(child.stdout.unwrap());
-                                        let mut entries = match subtar.entries() {
-                                            Ok(entries) => entries,
-                                            Err(_) => continue,
-                                        };
+                                    let child = std::process::Command::new("restic")
+                                        .envs(&configuration.environment)
+                                        .arg("--json")
+                                        .arg("--no-lock")
+                                        .arg("--repo")
+                                        .arg(&configuration.repository)
+                                        .args(configuration.password())
+                                        .arg("dump")
+                                        .arg(format!("{}:{}", short_id, path.display()))
+                                        .arg("/")
+                                        .stdout(std::process::Stdio::piped())
+                                        .stderr(std::process::Stdio::null())
+                                        .spawn()?;
 
-                                        while let Some(Ok(entry)) = entries.next() {
-                                            let mut header = entry.header().clone();
+                                    let mut subtar = tar::Archive::new(child.stdout.unwrap());
+                                    let mut entries = subtar.entries()?;
 
-                                            match archive.append_data(
-                                                &mut header,
-                                                relative.join(match entry.path() {
-                                                    Ok(path) => path,
-                                                    Err(_) => continue,
-                                                }),
-                                                entry,
-                                            ) {
-                                                Ok(_) => {}
-                                                Err(_) => break,
-                                            }
-                                        }
+                                    while let Some(Ok(entry)) = entries.next() {
+                                        let mut header = entry.header().clone();
+
+                                        archive.append_data(
+                                            &mut header,
+                                            relative.join(match entry.path() {
+                                                Ok(path) => path,
+                                                Err(_) => continue,
+                                            }),
+                                            entry,
+                                        )?;
                                     }
                                 }
                                 ResticEntryType::File => {
-                                    let child = match std::process::Command::new("restic")
+                                    let child = std::process::Command::new("restic")
                                         .envs(&configuration.environment)
                                         .arg("--json")
                                         .arg("--no-lock")
@@ -1394,28 +1377,26 @@ impl BackupBrowseExt for BrowseResticBackup {
                                         .arg(&path)
                                         .stdout(std::process::Stdio::piped())
                                         .stderr(std::process::Stdio::null())
-                                        .spawn()
-                                    {
-                                        Ok(child) => child,
-                                        Err(_) => continue,
-                                    };
+                                        .spawn()?;
 
                                     header.set_size(entry.size.unwrap_or(0));
                                     header.set_entry_type(tar::EntryType::Regular);
 
-                                    archive
-                                        .append_data(&mut header, relative, child.stdout.unwrap())
-                                        .ok();
+                                    archive.append_data(
+                                        &mut header,
+                                        relative,
+                                        child.stdout.unwrap(),
+                                    )?;
                                 }
                                 _ => continue,
                             }
                         }
 
-                        if let Ok(inner) = archive.into_inner()
-                            && let Ok(mut inner) = inner.finish()
-                        {
-                            inner.flush().ok();
-                        }
+                        archive.finish()?;
+                        let mut inner = archive.into_inner()?;
+                        inner.flush()?;
+
+                        Ok(())
                     }
                 });
             }

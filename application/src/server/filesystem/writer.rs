@@ -399,7 +399,7 @@ impl Drop for AsyncFileSystemWriter {
             tokio::spawn(async move {
                 let file = writer.into_inner().into_std().await;
 
-                tokio::task::spawn_blocking(move || file.set_modified(modified.into_std()));
+                crate::spawn_blocking_handled(move || file.set_modified(modified.into_std()));
             });
         }
     }
