@@ -325,7 +325,7 @@ mod post {
                                                     progress.fetch_add(metadata.len(), Ordering::Relaxed);
                                                 } else if metadata.is_symlink() && let Ok(target) = server.filesystem.async_read_link(&path).await {
                                                     if let Err(err) = server.filesystem.async_symlink(&target, &destination_path).await {
-                                                        tracing::debug!(path = %destination_path.display(), "failed to create symlink from backup: {:?}", err);
+                                                        tracing::debug!(path = %destination_path.display(), "failed to create symlink from copy: {:?}", err);
                                                     } else if let Ok(modified_time) = metadata.modified() {
                                                         server.filesystem.async_set_times(
                                                             &destination_path,
