@@ -1,7 +1,10 @@
 use compact_str::ToCompactString;
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use utoipa::ToSchema;
 
 pub mod process;
@@ -130,19 +133,45 @@ nestify::nest! {
 }
 
 impl ServerConfiguration {
+    fn machine_id_path(&self, config: &crate::config::Config) -> PathBuf {
+        Path::new(&config.system.tmp_directory).join(format!("{}/machine-id", self.uuid))
+    }
+
+    fn machine_uuid_path(&self, config: &crate::config::Config) -> PathBuf {
+        Path::new(&config.system.tmp_directory).join(format!("{}/machine-uuid", self.uuid))
+    }
+
     async fn mounts(
         &self,
         config: &crate::config::Config,
         filesystem: &super::filesystem::Filesystem,
     ) -> Vec<Mount> {
         let mut mounts = Vec::new();
-        mounts.reserve_exact(3 + self.mounts.len());
+        mounts.reserve_exact(5 + self.mounts.len());
 
         mounts.push(Mount {
             default: true,
             target: "/home/container".into(),
             source: filesystem.get_base_fs_path().await.to_string_lossy().into(),
             read_only: false,
+        });
+        mounts.push(Mount {
+            default: false,
+            target: "/etc/machine-id".into(),
+            source: self
+                .machine_id_path(config)
+                .to_string_lossy()
+                .to_compact_string(),
+            read_only: true,
+        });
+        mounts.push(Mount {
+            default: false,
+            target: "/sys/class/dmi/id/product_uuid".into(),
+            source: self
+                .machine_uuid_path(config)
+                .to_string_lossy()
+                .to_compact_string(),
+            read_only: true,
         });
 
         if config.system.passwd.enabled {
@@ -270,6 +299,25 @@ impl ServerConfiguration {
         }
 
         map
+    }
+
+    pub async fn create_machine_id_files(
+        &self,
+        config: &crate::config::Config,
+    ) -> Result<(), std::io::Error> {
+        let machine_id_path = self.machine_id_path(config);
+        if let Some(parent) = machine_id_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::write(&machine_id_path, self.uuid.simple().to_string()).await?;
+
+        let machine_uuid_path = self.machine_uuid_path(config);
+        if let Some(parent) = machine_uuid_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::write(&machine_uuid_path, self.uuid.to_string()).await?;
+
+        Ok(())
     }
 
     pub fn convert_container_resources(

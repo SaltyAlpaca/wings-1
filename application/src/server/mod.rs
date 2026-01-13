@@ -530,6 +530,12 @@ impl Server {
             "setting up container"
         );
 
+        self.configuration
+            .read()
+            .await
+            .create_machine_id_files(&self.app_state.config)
+            .await?;
+
         let container = self
             .app_state
             .docker
@@ -1138,7 +1144,7 @@ impl Server {
 
                         match stop.r#type.as_str() {
                             "signal" => {
-                                tokio::spawn({
+                                crate::spawn_handled({
                                     let container = container.clone();
                                     let value = stop.value.clone();
                                     let server = server.clone();
@@ -1156,6 +1162,7 @@ impl Server {
                                                                 "SIGTERM" => "SIGTERM".to_string(),
                                                                 "SIGQUIT" => "SIGQUIT".to_string(),
                                                                 "SIGKILL" => "SIGKILL".to_string(),
+                                                                "C" => "SIGINT".to_string(),
                                                                 _ => {
                                                                     tracing::error!(
                                                                         server = %server.uuid,
@@ -1172,7 +1179,6 @@ impl Server {
                                                 }),
                                             )
                                             .await
-                                            .unwrap()
                                     }
                                 });
 
@@ -1206,7 +1212,7 @@ impl Server {
                                     stop.r#type
                                 );
 
-                                tokio::spawn({
+                                crate::spawn_handled({
                                     let client = Arc::clone(&server.app_state.docker);
                                     let container = container.clone();
 
@@ -1219,7 +1225,6 @@ impl Server {
                                                 }),
                                             )
                                             .await
-                                            .unwrap()
                                     }
                                 });
 
