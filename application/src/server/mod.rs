@@ -530,12 +530,6 @@ impl Server {
             "setting up container"
         );
 
-        self.configuration
-            .read()
-            .await
-            .ensure_vmounts(&self.app_state.config)
-            .await?;
-
         let container = self
             .app_state
             .docker
@@ -977,6 +971,12 @@ impl Server {
             server = %self.uuid,
             "starting server"
         );
+
+        self.configuration
+            .read()
+            .await
+            .ensure_vmounts(&self.app_state.config)
+            .await?;
 
         let server = self.clone();
         tokio::spawn(async move {
