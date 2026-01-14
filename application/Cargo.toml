@@ -65,7 +65,7 @@ chrono-tz = "0.10.4"
 gzp = "2.0.0"
 lzma-rust2 = { version = "0.15.4", features = ["optimization"] }
 bzip2 = "0.6.0"
-zstd = { version = "0.13.3", features = ["zstdmt", "fat-lto"] }
+zstd = { version = "0.13.3", features = ["zstdmt"] }
 base64 = "0.22.1"
 chunked_vec = "=0.3.4"
 async-channel = "2.5.0"
