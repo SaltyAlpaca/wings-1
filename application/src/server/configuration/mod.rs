@@ -106,6 +106,9 @@ nestify::nest! {
             pub timezone: Option<compact_str::CompactString>,
 
             #[serde(default)]
+            pub hugepages_passthrough_enabled: bool,
+
+            #[serde(default)]
             #[schema(inline)]
             pub seccomp: #[derive(ToSchema, Deserialize, Serialize, DefaultFromSerde)] pub struct ServerConfigurationContainerSeccomp {
                 #[serde(default)]
@@ -165,7 +168,6 @@ impl ServerConfiguration {
         filesystem: &super::filesystem::Filesystem,
     ) -> Vec<Mount> {
         let mut mounts = self.vmounts(config);
-        mounts.reserve_exact(5 + self.mounts.len());
 
         mounts.push(Mount {
             default: true,
@@ -173,6 +175,15 @@ impl ServerConfiguration {
             source: filesystem.get_base_fs_path().await.to_string_lossy().into(),
             read_only: false,
         });
+
+        if self.container.hugepages_passthrough_enabled {
+            mounts.push(Mount {
+                default: false,
+                target: "/dev/hugepages".into(),
+                source: "/dev/hugepages".into(),
+                read_only: false,
+            });
+        }
 
         if config.system.passwd.enabled {
             mounts.push(Mount {

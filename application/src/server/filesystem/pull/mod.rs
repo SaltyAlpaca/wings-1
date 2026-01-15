@@ -1,6 +1,9 @@
 use anyhow::Context;
+use compact_str::ToCompactString;
 use rand::Rng;
+use serde::Serialize;
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{
@@ -9,6 +12,7 @@ use std::{
     },
 };
 use tokio::{io::AsyncWriteExt, sync::RwLock};
+use utoipa::ToSchema;
 
 use crate::server::filesystem::virtualfs::VirtualWritableFilesystem;
 
@@ -38,6 +42,65 @@ async fn get_download_client(
     *write_lock = Some(Arc::clone(&new_client));
 
     Ok(new_client)
+}
+
+#[derive(ToSchema, Serialize)]
+pub struct PullQueryResponse {
+    pub file_name: Option<compact_str::CompactString>,
+    pub file_size: Option<u64>,
+
+    pub final_url: compact_str::CompactString,
+    pub headers: HashMap<compact_str::CompactString, compact_str::CompactString>,
+}
+
+impl PullQueryResponse {
+    pub async fn query(
+        config: &Arc<crate::config::Config>,
+        url: &str,
+    ) -> Result<Self, anyhow::Error> {
+        let response = get_download_client(config)
+            .await?
+            .get(url)
+            .send()
+            .await
+            .context("failed to send HEAD request")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "failed to query download URL: code {}",
+                response.status()
+            ));
+        }
+
+        let mut headers = HashMap::new();
+        for (key, value) in response.headers().iter() {
+            if let Ok(value_str) = value.to_str() {
+                headers.insert(key.to_compact_string(), value_str.to_compact_string());
+            }
+        }
+
+        let file_name = if let Some(header) = response.headers().get("Content-Disposition")
+            && let Ok(header) = header.to_str()
+            && let Some(filename) = crate::utils::parse_content_disposition_filename(header)
+        {
+            Some(filename.into())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            file_name,
+            file_size: response.content_length().or_else(|| {
+                response
+                    .headers()
+                    .get("Content-Length")
+                    .and_then(|c| c.to_str().ok())
+                    .and_then(|c| c.parse::<u64>().ok())
+            }),
+            final_url: response.url().to_compact_string(),
+            headers,
+        })
+    }
 }
 
 pub struct Download {
@@ -97,8 +160,7 @@ impl Download {
             if use_header {
                 if let Some(header) = response.headers().get("Content-Disposition")
                     && let Ok(header) = header.to_str()
-                    && let Some(filename) =
-                        content_disposition::parse_content_disposition(header).filename_full()
+                    && let Some(filename) = crate::utils::parse_content_disposition_filename(header)
                 {
                     real_destination.push(filename);
                     break 'header_check;

@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 pub fn draw_progress_bar(width: usize, current: f64, total: f64) -> String {
     let progress_percentage = (current / total) * 100.0;
     let formatted_percentage = if progress_percentage.is_nan() {
@@ -24,6 +26,28 @@ pub fn draw_progress_bar(width: usize, current: f64, total: f64) -> String {
     };
 
     format!("[{bar}] {formatted_percentage}")
+}
+
+pub fn parse_content_disposition_filename(header: &str) -> Option<String> {
+    static RE_STAR: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?i)filename\*=utf-8''([^;]+)").unwrap());
+
+    if let Some(caps) = RE_STAR.captures(header) {
+        let encoded_filename = &caps[1];
+
+        if let Ok(decoded) = percent_encoding::percent_decode_str(encoded_filename).decode_utf8() {
+            return Some(decoded.into_owned());
+        }
+    }
+
+    static RE_LEGACY: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"(?i)filename="?([^";]+)"?"#).unwrap());
+
+    if let Some(caps) = RE_LEGACY.captures(header) {
+        return Some(caps[1].to_string());
+    }
+
+    None
 }
 
 #[inline]

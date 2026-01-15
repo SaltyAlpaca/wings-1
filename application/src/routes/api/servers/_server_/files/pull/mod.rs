@@ -2,6 +2,7 @@ use super::State;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod _pull_;
+mod query;
 
 mod get {
     use crate::{
@@ -198,6 +199,7 @@ mod post {
 #[allow(deprecated)]
 pub fn router(state: &State) -> OpenApiRouter<State> {
     OpenApiRouter::new()
+        .nest("/query", query::router(state))
         .nest("/{pull}", _pull_::router(state))
         .routes(routes!(get::route))
         .routes(routes!(post::route))
