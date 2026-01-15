@@ -102,8 +102,6 @@ nestify::nest! {
 
         #[schema(inline)]
         pub container: #[derive(ToSchema, Deserialize, Serialize)] pub struct ServerConfigurationContainer {
-            #[serde(default)]
-            pub privileged: bool,
             pub image: compact_str::CompactString,
             pub timezone: Option<compact_str::CompactString>,
 
@@ -489,7 +487,6 @@ impl ServerConfiguration {
                 blkio_weight: resources.blkio_weight,
                 oom_kill_disable: resources.oom_kill_disable,
 
-                privileged: Some(self.container.privileged),
                 port_bindings: Some(self.convert_allocations_docker_bindings(config)),
                 mounts: Some(self.convert_mounts(config, filesystem).await),
                 network_mode: Some(network_mode),
@@ -531,6 +528,7 @@ impl ServerConfiguration {
                     "net_bind_service".to_string(),
                     "sys_chroot".to_string(),
                     "setfcap".to_string(),
+                    "sys_ptrace".to_string(),
                 ]),
                 userns_mode: string_to_option(&config.docker.userns_mode),
                 readonly_rootfs: Some(true),
