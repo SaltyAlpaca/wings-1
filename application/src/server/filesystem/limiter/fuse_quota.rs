@@ -39,38 +39,33 @@ impl<'a> FuseQuotaLimiter<'a> {
     async fn talk_to_socket(&self, cmd: &str) -> Result<String, std::io::Error> {
         let socket_path = self.get_fusequota_socket_path();
 
-        let (reader, mut writer) = tokio::time::timeout(
-            std::time::Duration::from_millis(500),
-            UnixStream::connect(socket_path),
-        )
-        .await??
-        .into_split();
+        let run = async || -> Result<String, std::io::Error> {
+            let (reader, mut writer) = UnixStream::connect(socket_path).await?.into_split();
 
-        writer.write_all(format!("{}\n", cmd).as_bytes()).await?;
-        writer.shutdown().await?;
+            writer.write_all(format!("{}\n", cmd).as_bytes()).await?;
+            writer.shutdown().await?;
 
-        let mut reader = BufReader::new(reader);
-        let mut response = String::new();
-        let mut line = String::new();
+            let mut reader = BufReader::new(reader);
+            let mut response = String::new();
+            let mut line = String::new();
 
-        while tokio::time::timeout(
-            std::time::Duration::from_millis(500),
-            reader.read_line(&mut line),
-        )
-        .await
-        .is_ok_and(|l| l.is_ok_and(|l| l > 0))
-        {
-            response.push_str(&line);
-            line.clear();
-        }
-
-        for line in response.lines() {
-            if line.starts_with("ERROR:") {
-                return Err(std::io::Error::other(format!(
-                    "fusequota socket returned error: {line}"
-                )));
+            while reader.read_line(&mut line).await.is_ok_and(|l| l > 0) {
+                response.push_str(&line);
+                line.clear();
             }
-        }
+
+            for line in response.lines() {
+                if line.starts_with("ERROR:") {
+                    return Err(std::io::Error::other(format!(
+                        "fusequota socket returned error: {line}"
+                    )));
+                }
+            }
+
+            Ok(response)
+        };
+
+        let response = tokio::time::timeout(std::time::Duration::from_secs(5), run()).await??;
 
         Ok(response)
     }
