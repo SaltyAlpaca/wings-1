@@ -74,7 +74,7 @@ static DISK_USAGE: LazyLock<Arc<RwLock<DiskUsageMap>>> = LazyLock::new(|| {
 async fn get_root_pool_name(path: &Path) -> Result<String, std::io::Error> {
     let output = Command::new("zfs")
         .arg("list")
-        .arg("-H") // No headers
+        .arg("-H")
         .arg("-o")
         .arg("name,mountpoint")
         .output()

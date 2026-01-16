@@ -1,6 +1,7 @@
 use crate::server::filesystem::limiter::DiskLimiterExt;
 use std::{
     collections::{HashMap, HashSet},
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
@@ -100,6 +101,16 @@ async fn fetch_btrfs_usage(mount_point: &Path) -> Result<HashMap<u64, i64>, Stri
 }
 
 async fn get_btrfs_subvol_id(path: &Path) -> Result<u64, std::io::Error> {
+    let metadata = tokio::fs::metadata(path).await?;
+
+    // btrfs subvolumes always have inode number 256
+    if metadata.ino() != 256 {
+        return Err(std::io::Error::other(format!(
+            "Path is not a Btrfs subvolume: {}",
+            path.display()
+        )));
+    }
+
     let output = Command::new("btrfs")
         .arg("inspect-internal")
         .arg("rootid")
