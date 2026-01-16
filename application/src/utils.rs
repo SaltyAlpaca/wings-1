@@ -2,10 +2,10 @@ use std::sync::LazyLock;
 
 pub fn draw_progress_bar(width: usize, current: f64, total: f64) -> String {
     let progress_percentage = (current / total) * 100.0;
-    let formatted_percentage = if progress_percentage.is_nan() {
-        "0.00%"
-    } else {
+    let formatted_percentage = if progress_percentage.is_finite() {
         &format!("{:.2}%", progress_percentage)
+    } else {
+        "0.00%"
     };
 
     let completed_width = std::cmp::min(

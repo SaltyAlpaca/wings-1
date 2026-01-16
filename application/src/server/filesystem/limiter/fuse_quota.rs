@@ -64,6 +64,14 @@ impl<'a> FuseQuotaLimiter<'a> {
             line.clear();
         }
 
+        for line in response.lines() {
+            if line.starts_with("ERROR:") {
+                return Err(std::io::Error::other(format!(
+                    "fusequota socket returned error: {line}"
+                )));
+            }
+        }
+
         Ok(response)
     }
 

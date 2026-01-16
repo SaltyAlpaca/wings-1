@@ -8,8 +8,8 @@ struct Ratelimit {
     last_attempt: std::time::Instant,
 }
 
-impl Ratelimit {
-    fn new() -> Self {
+impl Default for Ratelimit {
+    fn default() -> Self {
         Self {
             password_attempts: 0,
             pubkey_attempts: 0,
@@ -66,7 +66,7 @@ impl SshRatelimiter {
         }
 
         let mut ratelimits = self.ratelimits.lock().await;
-        let entry = ratelimits.entry(ip).or_insert(Ratelimit::new());
+        let entry = ratelimits.entry(ip).or_default();
 
         if match authentication_type {
             AuthenticationType::Password => {
