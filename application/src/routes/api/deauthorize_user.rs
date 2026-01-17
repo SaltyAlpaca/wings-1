@@ -13,8 +13,8 @@ mod post {
 
     #[derive(ToSchema, Deserialize)]
     pub struct Payload {
-        user: uuid::Uuid,
         servers: HashSet<uuid::Uuid>,
+        user: uuid::Uuid,
     }
 
     #[derive(ToSchema, Serialize)]

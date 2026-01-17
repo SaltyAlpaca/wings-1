@@ -8,11 +8,12 @@ mod post {
     };
     use axum::http::StatusCode;
     use serde::{Deserialize, Serialize};
+    use std::collections::HashSet;
     use utoipa::ToSchema;
 
     #[derive(ToSchema, Deserialize)]
     pub struct Payload {
-        servers: Vec<uuid::Uuid>,
+        servers: HashSet<uuid::Uuid>,
         action: crate::models::ServerPowerAction,
         wait_seconds: Option<u64>,
     }
@@ -31,21 +32,7 @@ mod post {
     ) -> ApiResponseResult {
         let aquire_timeout = data.wait_seconds.map(std::time::Duration::from_secs);
 
-        let mut affected = 0;
-        for server_uuid in data.servers {
-            let server = match state
-                .server_manager
-                .get_servers()
-                .await
-                .iter()
-                .find(|s| s.uuid == server_uuid)
-            {
-                Some(server) => server.clone(),
-                None => continue,
-            };
-
-            affected += 1;
-
+        let spawn_task = |server: crate::server::Server| {
             tokio::spawn(async move {
                 match data.action {
                     crate::models::ServerPowerAction::Start => {
@@ -106,6 +93,23 @@ mod post {
                     }
                 }
             });
+        };
+
+        let mut affected = 0;
+        if data.servers.is_empty() {
+            for server in state.server_manager.get_servers().await.iter() {
+                affected += 1;
+
+                spawn_task(server.clone());
+            }
+        } else {
+            for server in state.server_manager.get_servers().await.iter() {
+                if data.servers.contains(&server.uuid) {
+                    affected += 1;
+
+                    spawn_task(server.clone());
+                }
+            }
         }
 
         ApiResponse::json(Response { affected })
