@@ -1099,13 +1099,12 @@ impl Archive {
                                     .set_times(&destination_path, dir.mtime, None)?;
                             }
                             ddup_bak::archive::entries::Entry::File(file) => {
-                                let writer = super::writer::FileSystemWriter::new(
+                                let mut writer = super::writer::FileSystemWriter::new(
                                     server.clone(),
                                     &destination_path,
                                     Some(cap_std::fs::Permissions::from_std(file.mode.into())),
                                     Some(cap_std::time::SystemTime::from_std(file.mtime)),
                                 )?;
-                                let mut writer = AbortWriter::new(writer, listener.clone());
 
                                 let reader = AbortReader::new(file, listener.clone());
                                 let mut reader: Box<dyn Read + Send> = match progress {
