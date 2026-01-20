@@ -242,7 +242,7 @@ mod post {
                                     if path.to_string_lossy().contains(data.query.as_str()) {
                                         let mut entry =
                                             filesystem.async_directory_entry(&path).await?;
-                                        entry.name = match path.strip_prefix(&data.root) {
+                                        entry.name = match path.strip_prefix(&*root) {
                                             Ok(path) => path.to_string_lossy().into(),
                                             Err(_) => return Ok(()),
                                         };
