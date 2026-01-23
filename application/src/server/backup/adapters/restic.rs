@@ -22,6 +22,7 @@ use crate::{
 };
 use axum::http::HeaderMap;
 use chrono::{Datelike, Timelike};
+use compact_str::ToCompactString;
 use human_bytes::human_bytes;
 use serde::Deserialize;
 use std::{
@@ -402,10 +403,14 @@ impl BackupCreateExt for ResticBackup {
                         .arg("--group-by")
                         .arg("tags")
                         .arg("--limit-download")
-                        .arg((server.app_state.config.system.backups.read_limit * 1024).to_string())
+                        .arg(
+                            (server.app_state.config.system.backups.read_limit.as_kib())
+                                .to_compact_string(),
+                        )
                         .arg("--limit-upload")
                         .arg(
-                            (server.app_state.config.system.backups.write_limit * 1024).to_string(),
+                            (server.app_state.config.system.backups.write_limit.as_kib())
+                                .to_compact_string(),
                         )
                         .stdout(std::process::Stdio::piped())
                         .stderr(std::process::Stdio::piped())
@@ -470,10 +475,14 @@ impl BackupCreateExt for ResticBackup {
                         .arg("--group-by")
                         .arg("tags")
                         .arg("--limit-download")
-                        .arg((server.app_state.config.system.backups.read_limit * 1024).to_string())
+                        .arg(
+                            (server.app_state.config.system.backups.read_limit.as_kib())
+                                .to_compact_string(),
+                        )
                         .arg("--limit-upload")
                         .arg(
-                            (server.app_state.config.system.backups.write_limit * 1024).to_string(),
+                            (server.app_state.config.system.backups.write_limit.as_kib())
+                                .to_compact_string(),
                         )
                         .stdout(std::process::Stdio::piped())
                         .stderr(std::process::Stdio::piped())
@@ -706,7 +715,7 @@ impl BackupExt for ResticBackup {
             .arg("--target")
             .arg(&server.filesystem.base_path)
             .arg("--limit-download")
-            .arg((server.app_state.config.system.backups.read_limit * 1024).to_string())
+            .arg((server.app_state.config.system.backups.read_limit.as_kib()).to_compact_string())
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 
@@ -733,14 +742,12 @@ impl BackupExt for ResticBackup {
                 progress.store(bytes_restored, Ordering::SeqCst);
                 total.store(total_bytes, Ordering::SeqCst);
 
-                server
-                    .log_daemon(format!(
-                        "(restoring): {} of {} ({}%)",
-                        human_bytes(bytes_restored as f64),
-                        human_bytes(total_bytes as f64),
-                        percent_done
-                    ))
-                    .await;
+                server.log_daemon(compact_str::format_compact!(
+                    "(restoring): {} of {} ({}%)",
+                    human_bytes(bytes_restored as f64),
+                    human_bytes(total_bytes as f64),
+                    percent_done
+                ));
             }
         }
 

@@ -241,7 +241,7 @@ impl Container {
                                     "ratelimit reached for server output"
                                 );
 
-                                server.log_daemon_with_prelude("Server is outputting console data too quickly -- throttling...").await;
+                                server.log_daemon_with_prelude("Server is outputting console data too quickly -- throttling...");
                             }
 
                             return false;

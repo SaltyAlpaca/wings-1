@@ -195,18 +195,18 @@ mod post {
 
             while let Some(chunk) = field.chunk().await? {
                 if crate::unlikely(
-                    written_size + chunk.len() > state.config.api.upload_limit * 1024 * 1024,
+                    written_size + chunk.len() as u64 > state.config.api.upload_limit.as_bytes(),
                 ) {
                     return ApiResponse::error(&format!(
                         "file size is larger than {}MB",
-                        state.config.api.upload_limit
+                        state.config.api.upload_limit.as_mib()
                     ))
                     .with_status(StatusCode::EXPECTATION_FAILED)
                     .ok();
                 }
 
                 writer.write_all(&chunk).await?;
-                written_size += chunk.len();
+                written_size += chunk.len() as u64;
             }
 
             writer.shutdown().await?;

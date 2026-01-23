@@ -1,3 +1,4 @@
+use compact_str::ToCompactString;
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -113,8 +114,8 @@ impl OperationManager {
                             .send(crate::server::websocket::WebsocketMessage::new(
                                 crate::server::websocket::WebsocketEvent::ServerOperationProgress,
                                 [
-                                    operation_uuid.to_string(),
-                                    serde_json::to_string(&operation).unwrap(),
+                                    operation_uuid.to_compact_string(),
+                                    serde_json::to_string(&operation).unwrap().into(),
                                 ]
                                 .into(),
                             ))
@@ -161,14 +162,14 @@ impl OperationManager {
                     sender
                         .send(crate::server::websocket::WebsocketMessage::new(
                             crate::server::websocket::WebsocketEvent::ServerOperationError,
-                            [operation_uuid.to_string(), message].into(),
+                            [operation_uuid.to_compact_string(), message.into()].into(),
                         ))
                         .ok();
                 } else {
                     sender
                         .send(crate::server::websocket::WebsocketMessage::new(
                             crate::server::websocket::WebsocketEvent::ServerOperationCompleted,
-                            [operation_uuid.to_string()].into(),
+                            [operation_uuid.to_compact_string()].into(),
                         ))
                         .ok();
                 }

@@ -9,6 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
+use compact_str::ToCompactString;
 use futures_util::{SinkExt, StreamExt};
 use std::{net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, RwLock, broadcast::error::RecvError};
@@ -136,7 +137,7 @@ pub async fn handle_ws(
                             websocket_handler.send_message(
                                 websocket::WebsocketMessage::new(
                                     websocket::WebsocketEvent::JwtError,
-                                    [err.to_string()].into(),
+                                    [err.to_compact_string()].into(),
                                 ),
                             )
                             .await;
@@ -321,7 +322,7 @@ pub async fn handle_ws(
                                             websocket_handler.send_message(
                                                 websocket::WebsocketMessage::new(
                                                     websocket::WebsocketEvent::ServerConsoleOutput,
-                                                    [stdout.to_string()].into(),
+                                                    [stdout.to_compact_string()].into(),
                                                 ),
                                             )
                                             .await;

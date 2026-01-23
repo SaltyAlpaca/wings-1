@@ -291,7 +291,7 @@ impl Schedule {
                     .websocket
                     .send(WebsocketMessage::new(
                         WebsocketEvent::ServerScheduleStarted,
-                        [uuid.to_string()].into(),
+                        [uuid.to_compact_string()].into(),
                     ))
                     .ok();
 
@@ -305,7 +305,11 @@ impl Schedule {
                         .websocket
                         .send(WebsocketMessage::new(
                             WebsocketEvent::ServerScheduleStepStatus,
-                            [uuid.to_string(), raw_action.uuid.to_string()].into(),
+                            [
+                                uuid.to_compact_string(),
+                                raw_action.uuid.to_compact_string(),
+                            ]
+                            .into(),
                         ))
                         .ok();
 
@@ -328,9 +332,9 @@ impl Schedule {
                                 .send(WebsocketMessage::new(
                                     WebsocketEvent::ServerScheduleStepError,
                                     [
-                                        uuid.to_string(),
-                                        raw_action.uuid.to_string(),
-                                        err.to_string(),
+                                        uuid.to_compact_string(),
+                                        raw_action.uuid.to_compact_string(),
+                                        err.to_compact_string(),
                                     ]
                                     .into(),
                                 ))
@@ -355,7 +359,7 @@ impl Schedule {
                     .websocket
                     .send(WebsocketMessage::new(
                         WebsocketEvent::ServerScheduleCompleted,
-                        [uuid.to_string()].into(),
+                        [uuid.to_compact_string()].into(),
                     ))
                     .ok();
 

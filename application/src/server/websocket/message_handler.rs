@@ -22,7 +22,7 @@ pub async fn handle_message(
             websocket_handler
                 .send_message(WebsocketMessage::new(
                     WebsocketEvent::ServerStats,
-                    [serde_json::to_string(&server.resource_usage().await)?].into(),
+                    [serde_json::to_string(&server.resource_usage().await)?.into()].into(),
                 ))
                 .await;
         }
@@ -49,18 +49,19 @@ pub async fn handle_message(
                     websocket_handler
                         .send_message(WebsocketMessage::new(
                             WebsocketEvent::ServerConsoleOutput,
-                            [line.trim().to_string()].into(),
+                            [line.trim().into()].into(),
                         ))
                         .await;
                 }
             }
         }
         WebsocketEvent::SetState => {
-            let power_state = crate::models::ServerPowerAction::from_str(
-                message.args.first().map_or("", |s| s.as_str()),
-            )?;
+            let Some(action) = message.args.first().map(|s| s.as_str()) else {
+                return Ok(());
+            };
+            let power_action = crate::models::ServerPowerAction::from_str(action)?;
 
-            match power_state {
+            match power_action {
                 crate::models::ServerPowerAction::Start => {
                     let socket_jwt = websocket_handler.get_jwt().await?;
 
@@ -309,7 +310,9 @@ pub async fn handle_message(
             }
             drop(socket_jwt);
 
-            let raw_command = message.args.first().map_or("", |v| v.as_str());
+            let Some(raw_command) = message.args.first() else {
+                return Ok(());
+            };
             if let Some(stdin) = server.container_stdin().await {
                 let mut command = raw_command.to_compact_string();
                 command.push('\n');

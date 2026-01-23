@@ -225,7 +225,13 @@ impl BackupCreateExt for S3Backup {
             let writer = tokio_util::io::SyncIoBridge::new(checksum_writer);
             let writer = LimitedWriter::new_with_bytes_per_second(
                 writer,
-                server.app_state.config.system.backups.write_limit * 1024 * 1024,
+                server
+                    .app_state
+                    .config
+                    .system
+                    .backups
+                    .write_limit
+                    .as_bytes(),
             );
 
             let file = crate::server::filesystem::archive::create::create_tar(
@@ -300,7 +306,13 @@ impl BackupCreateExt for S3Backup {
                                     Arc::clone(&progress),
                                 )
                                 .await?,
-                                server.app_state.config.system.backups.write_limit * 1024 * 1024,
+                                server
+                                    .app_state
+                                    .config
+                                    .system
+                                    .backups
+                                    .write_limit
+                                    .as_bytes(),
                             ),
                             crate::BUFFER_SIZE,
                         ),
@@ -415,14 +427,13 @@ impl BackupExt for S3Backup {
             response.bytes_stream().map_err(std::io::Error::other),
         ));
 
-        let runtime = tokio::runtime::Handle::current();
         let server = server.clone();
 
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
             let reader = tokio_util::io::SyncIoBridge::new(reader);
             let reader = LimitedReader::new_with_bytes_per_second(
                 reader,
-                server.app_state.config.system.backups.read_limit * 1024 * 1024,
+                server.app_state.config.system.backups.read_limit.as_bytes(),
             );
             let reader = CountingReader::new_with_bytes_read(reader, progress);
             let reader = CompressionReader::new(
@@ -459,10 +470,7 @@ impl BackupExt for S3Backup {
                         }
                     }
                     tar::EntryType::Regular => {
-                        runtime.block_on(
-                            server
-                                .log_daemon(format!("(restoring): {}", path.display()))
-                        );
+                        server.log_daemon(compact_str::format_compact!("(restoring): {}", path.display()));
 
                         if let Some(parent) = path.parent() {
                             server.filesystem.create_dir_all(parent)?;

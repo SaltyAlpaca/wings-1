@@ -478,8 +478,6 @@ impl BackupExt for DdupBakBackup {
 
         let server = server.clone();
         tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
-            let runtime = tokio::runtime::Handle::current();
-
             fn recursive_size(entry: &Entry) -> u64 {
                 match entry {
                     Entry::File(file) => file.size_real,
@@ -496,7 +494,6 @@ impl BackupExt for DdupBakBackup {
             );
 
             fn recursive_restore(
-                runtime: &tokio::runtime::Handle,
                 repository: &Arc<ddup_bak::repository::Repository>,
                 entry: &Entry,
                 path: &Path,
@@ -514,9 +511,7 @@ impl BackupExt for DdupBakBackup {
 
                 match entry {
                     Entry::File(file) => {
-                        runtime.block_on(
-                            server.log_daemon(format!("(restoring): {}", path.display())),
-                        );
+                        server.log_daemon(compact_str::format_compact!("(restoring): {}", path.display()));
 
                         if let Some(parent) = path.parent() {
                             server.filesystem.create_dir_all(parent)?;
@@ -543,7 +538,7 @@ impl BackupExt for DdupBakBackup {
                         )?;
 
                         for entry in &directory.entries {
-                            recursive_restore(runtime, repository, entry, &path, server, progress)?;
+                            recursive_restore(repository, entry, &path, server, progress)?;
                         }
 
                         server.filesystem.set_times(&path, directory.mtime, None)?;
@@ -566,7 +561,6 @@ impl BackupExt for DdupBakBackup {
 
             for entry in archive.entries() {
                 recursive_restore(
-                    &runtime,
                     &repository,
                     entry,
                     Path::new("."),

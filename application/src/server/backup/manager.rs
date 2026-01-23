@@ -2,6 +2,7 @@ use crate::{
     remote::backups::RawServerBackup,
     server::{backup::adapters::BackupAdapter, filesystem::virtualfs::VirtualReadableFilesystem},
 };
+use compact_str::ToCompactString;
 use ignore::gitignore::GitignoreBuilder;
 use std::sync::{
     Arc,
@@ -120,9 +121,10 @@ impl BackupManager {
                         .send(crate::server::websocket::WebsocketMessage::new(
                             crate::server::websocket::WebsocketEvent::ServerBackupProgress,
                             [
-                                uuid.to_string(),
+                                uuid.to_compact_string(),
                                 serde_json::to_string(&crate::models::Progress { progress, total })
-                                    .unwrap(),
+                                    .unwrap()
+                                    .into(),
                             ]
                             .into(),
                         ))
@@ -137,7 +139,7 @@ impl BackupManager {
             .websocket
             .send(crate::server::websocket::WebsocketMessage::new(
                 crate::server::websocket::WebsocketEvent::ServerBackupStarted,
-                [uuid.to_string()].into(),
+                [uuid.to_compact_string()].into(),
             ))?;
         server
             .schedules
@@ -182,7 +184,7 @@ impl BackupManager {
                     .send(crate::server::websocket::WebsocketMessage::new(
                         crate::server::websocket::WebsocketEvent::ServerBackupCompleted,
                         [
-                            uuid.to_string(),
+                            uuid.to_compact_string(),
                             serde_json::json!({
                                 "checksum_type": "",
                                 "checksum": "",
@@ -192,7 +194,7 @@ impl BackupManager {
                                 "browsable": false,
                                 "streaming": false,
                             })
-                            .to_string(),
+                            .to_compact_string(),
                         ]
                         .into(),
                     ))?;
@@ -217,7 +219,7 @@ impl BackupManager {
             .send(crate::server::websocket::WebsocketMessage::new(
                 crate::server::websocket::WebsocketEvent::ServerBackupCompleted,
                 [
-                    uuid.to_string(),
+                    uuid.to_compact_string(),
                     serde_json::json!({
                         "checksum_type": backup.checksum_type,
                         "checksum": backup.checksum,
@@ -227,7 +229,7 @@ impl BackupManager {
                         "browsable": backup.browsable,
                         "streaming": backup.streaming,
                     })
-                    .to_string(),
+                    .to_compact_string(),
                 ]
                 .into(),
             ))?;
@@ -317,7 +319,8 @@ impl BackupManager {
                                 progress: progress_value,
                                 total: total_value,
                             })
-                            .unwrap()]
+                            .unwrap()
+                            .into()]
                             .into(),
                         ))
                         .ok();
@@ -347,12 +350,13 @@ impl BackupManager {
                 progress_task.abort();
 
                 server.restoring.store(false, Ordering::SeqCst);
-                server
-                    .log_daemon(format!(
+                server.log_daemon(
+                    format!(
                         "Completed server restoration from {} backup.",
                         backup.adapter().to_str()
-                    ))
-                    .await;
+                    )
+                    .into(),
+                );
                 server
                     .app_state
                     .config

@@ -41,11 +41,25 @@ async fn container_config(
         .convert_container_resources(&server.app_state.config);
 
     if resources.memory_reservation.is_some_and(|m| {
-        m > 0 && m < server.app_state.config.docker.installer_limits.memory as i64 * 1024 * 1024
+        m > 0
+            && m < server
+                .app_state
+                .config
+                .docker
+                .installer_limits
+                .memory
+                .as_bytes() as i64
     }) {
         resources.memory = None;
-        resources.memory_reservation =
-            Some(server.app_state.config.docker.installer_limits.memory as i64 * 1024 * 1024);
+        resources.memory_reservation = Some(
+            server
+                .app_state
+                .config
+                .docker
+                .installer_limits
+                .memory
+                .as_bytes() as i64,
+        );
         resources.memory_swap = None;
     }
 

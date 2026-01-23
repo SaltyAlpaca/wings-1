@@ -356,7 +356,7 @@ impl ServerConfiguration {
         let mut resources = bollard::models::Resources {
             memory: match self.build.memory_limit {
                 0 => None,
-                limit => Some(config.docker.overhead.get_memory(limit) * 1024 * 1024),
+                limit => Some(config.docker.overhead.get_memory(limit.into()).as_bytes() as i64),
             },
             memory_reservation: match self.build.memory_limit {
                 0 => None,
@@ -368,7 +368,11 @@ impl ServerConfiguration {
                 limit => match self.build.memory_limit {
                     0 => Some(limit * 1024 * 1024),
                     memory_limit => Some(
-                        config.docker.overhead.get_memory(memory_limit) * 1024 * 1024
+                        config
+                            .docker
+                            .overhead
+                            .get_memory(memory_limit.into())
+                            .as_bytes() as i64
                             + limit * 1024 * 1024,
                     ),
                 },

@@ -150,7 +150,13 @@ impl BackupCreateExt for WingsBackup {
             let sources = server.filesystem.async_read_dir_all(Path::new("")).await?;
             let writer = LimitedWriter::new_with_bytes_per_second(
                 file,
-                server.app_state.config.system.backups.write_limit * 1024 * 1024,
+                server
+                    .app_state
+                    .config
+                    .system
+                    .backups
+                    .write_limit
+                    .as_bytes(),
             );
 
             let file = match server.app_state.config.system.backups.wings.archive_format {
@@ -338,7 +344,6 @@ impl BackupExt for WingsBackup {
             | ArchiveFormat::TarBz2
             | ArchiveFormat::TarLz4
             | ArchiveFormat::TarZstd => {
-                let runtime = tokio::runtime::Handle::current();
                 let compression_type = self.format.compression_format();
                 let server = server.clone();
 
@@ -347,7 +352,7 @@ impl BackupExt for WingsBackup {
 
                     let reader = LimitedReader::new_with_bytes_per_second(
                         file,
-                        server.app_state.config.system.backups.read_limit * 1024 * 1024,
+                        server.app_state.config.system.backups.read_limit.as_bytes(),
                     );
                     let reader = CountingReader::new_with_bytes_read(reader, progress);
                     let reader = CompressionReaderMt::new(
@@ -388,9 +393,10 @@ impl BackupExt for WingsBackup {
                                 }
                             }
                             tar::EntryType::Regular => {
-                                runtime.block_on(
-                                    server.log_daemon(format!("(restoring): {}", path.display())),
-                                );
+                                server.log_daemon(compact_str::format_compact!(
+                                    "(restoring): {}",
+                                    path.display()
+                                ));
 
                                 if let Some(parent) = destination_path.parent() {
                                     server.filesystem.create_dir_all(parent)?;
@@ -456,7 +462,6 @@ impl BackupExt for WingsBackup {
                 .await??;
             }
             ArchiveFormat::Zip => {
-                let runtime = tokio::runtime::Handle::current();
                 let server = server.clone();
 
                 tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
@@ -487,7 +492,6 @@ impl BackupExt for WingsBackup {
 
                         scope.spawn_broadcast(move |_, _| {
                             let mut archive = archive.clone();
-                            let runtime = runtime.clone();
                             let progress = Arc::clone(&progress);
                             let entry_index = Arc::clone(&entry_index);
                             let error_clone2 = Arc::clone(&error_clone);
@@ -526,10 +530,7 @@ impl BackupExt for WingsBackup {
                                             ),
                                         )?;
                                     } else if entry.is_file() {
-                                        runtime.block_on(
-                                            server
-                                                .log_daemon(format!("(restoring): {}", path.display())),
-                                        );
+                                        server.log_daemon(compact_str::format_compact!("(restoring): {}", path.display()));
 
                                         if let Some(parent) = path.parent() {
                                             server.filesystem.create_dir_all(parent)?;
@@ -623,7 +624,6 @@ impl BackupExt for WingsBackup {
                 .await??;
             }
             ArchiveFormat::SevenZip => {
-                let runtime = tokio::runtime::Handle::current();
                 let server = server.clone();
 
                 tokio::task::spawn_blocking(move || -> Result<(), anyhow::Error> {
@@ -647,7 +647,6 @@ impl BackupExt for WingsBackup {
                             let archive = archive.clone();
                             let progress = progress.clone();
                             let mut reader = reader.clone();
-                            let runtime = runtime.clone();
                             let server = server.clone();
                             let error_clone = Arc::clone(&error);
 
@@ -690,9 +689,7 @@ impl BackupExt for WingsBackup {
                                             ));
                                         }
                                     } else {
-                                        runtime.block_on(
-                                            server.log_daemon(format!("(restoring): {path}")),
-                                        );
+                                        server.log_daemon(compact_str::format_compact!("(restoring): {path}"));
 
                                         if let Some(parent) = destination_path.parent()
                                             && let Err(err) =

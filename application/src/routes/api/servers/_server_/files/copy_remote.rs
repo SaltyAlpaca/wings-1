@@ -163,7 +163,7 @@ mod post {
                             let inner = async {
                                 let mut walker = filesystem
                                     .async_walk_dir_files_stream(
-                                        root.clone(),
+                                        &root,
                                         files.into_iter().map(PathBuf::from).collect(),
                                         ignored,
                                     )

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::{WebsocketEvent, WebsocketJwtPayload, WebsocketMessage};
 use crate::server::{permissions::Permission, websocket::ServerWebsocketHandler};
 use axum::extract::ws::Message;
+use compact_str::ToCompactString;
 
 pub enum JwtError {
     CloseSocket,
@@ -78,7 +79,7 @@ pub async fn handle_jwt(
                                     serde_json::to_value(permission)?
                                         .as_str()
                                         .unwrap()
-                                        .to_string(),
+                                        .to_compact_string(),
                                 );
                             }
 
@@ -99,7 +100,7 @@ pub async fn handle_jwt(
                                 websocket_handler
                                     .send_message(WebsocketMessage::new(
                                         WebsocketEvent::ServerStatus,
-                                        [server.state.get_state().to_str().to_string()].into(),
+                                        [server.state.get_state().to_str().into()].into(),
                                     ))
                                     .await;
                             }

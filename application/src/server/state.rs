@@ -63,7 +63,7 @@ impl ServerStateLock {
         self.sender
             .send(super::websocket::WebsocketMessage::new(
                 super::websocket::WebsocketEvent::ServerStatus,
-                [state.to_str().to_string()].into(),
+                [state.to_str().into()].into(),
             ))
             .unwrap_or_default();
     }

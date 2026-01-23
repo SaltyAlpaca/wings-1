@@ -1,4 +1,5 @@
 use bollard::secret::ContainerStateStatusEnum;
+use compact_str::ToCompactString;
 use futures_util::StreamExt;
 use serde_json::json;
 use std::{
@@ -172,7 +173,7 @@ impl Server {
                     if usage != prev_usage {
                         let message = websocket::WebsocketMessage::new(
                             websocket::WebsocketEvent::ServerStats,
-                            [serde_json::to_string(&usage).unwrap()].into(),
+                            [serde_json::to_string(&usage).unwrap().into()].into(),
                         );
 
                         if let Err(err) = server.websocket.send(message) {
@@ -190,9 +191,7 @@ impl Server {
                         && server.state.get_state() != state::ServerState::Offline
                         && !server.stopping.load(Ordering::SeqCst)
                     {
-                        server
-                        .log_daemon_with_prelude("Server is exceeding the assigned disk space limit, stopping process now.")
-                        .await;
+                        server.log_daemon_with_prelude("Server is exceeding the assigned disk space limit, stopping process now.");
 
                         let server_clone = server.clone();
                         tokio::spawn(async move {
@@ -326,19 +325,17 @@ impl Server {
 
                                 server.schedules.execute_crash_trigger().await;
 
-                                server.log_daemon_with_prelude("---------- Detected server process in a crashed state! ----------").await;
+                                server.log_daemon_with_prelude("---------- Detected server process in a crashed state! ----------");
                                 server
                                     .log_daemon_with_prelude(&format!(
                                         "Exit code: {}",
                                         container_state.exit_code.unwrap_or_default()
-                                    ))
-                                    .await;
+                                    ));
                                 server
                                     .log_daemon_with_prelude(&format!(
                                         "Out of memory: {}",
                                         container_state.oom_killed.unwrap_or(false)
-                                    ))
-                                    .await;
+                                    ));
 
                                 if container_state.oom_killed == Some(true) {
                                     tracing::info!(
@@ -363,7 +360,7 @@ impl Server {
                                                 "Aborting automatic restart, last crash occurred less than {} seconds ago.",
                                                 server.app_state.config.system.crash_detection.timeout
                                             ),
-                                        ).await;
+                                        );
                                         if server.app_state.config.docker.delete_container_on_stop {
                                             tokio::spawn({
                                                 let server = server.clone();
@@ -512,17 +509,76 @@ impl Server {
 
     #[inline]
     pub fn is_locked_state(&self) -> bool {
-        self.suspended.load(Ordering::SeqCst)
-            || self.installing.load(Ordering::SeqCst)
-            || self.restoring.load(Ordering::SeqCst)
-            || self.transferring.load(Ordering::SeqCst)
+        if !self.app_state.config.debug {
+            return self.suspended.load(Ordering::Relaxed)
+                || self.installing.load(Ordering::Relaxed)
+                || self.restoring.load(Ordering::Relaxed)
+                || self.transferring.load(Ordering::Relaxed);
+        }
+
+        if self.suspended.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at state check: suspended"
+            );
+            return true;
+        }
+        if self.installing.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at state check: installing"
+            );
+            return true;
+        }
+        if self.restoring.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at state check: restoring"
+            );
+            return true;
+        }
+        if self.transferring.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at state check: transferring"
+            );
+            return true;
+        }
+
+        false
     }
 
     #[inline]
     pub fn is_system_locked_state(&self) -> bool {
-        self.installing.load(Ordering::SeqCst)
-            || self.restoring.load(Ordering::SeqCst)
-            || self.transferring.load(Ordering::SeqCst)
+        if !self.app_state.config.debug {
+            return self.installing.load(Ordering::Relaxed)
+                || self.restoring.load(Ordering::Relaxed)
+                || self.transferring.load(Ordering::Relaxed);
+        }
+
+        if self.installing.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at system state check: installing"
+            );
+            return true;
+        }
+        if self.restoring.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at system state check: restoring"
+            );
+            return true;
+        }
+        if self.transferring.load(Ordering::Relaxed) {
+            tracing::debug!(
+                server = %self.uuid,
+                "server locked at system state check: transferring"
+            );
+            return true;
+        }
+
+        false
     }
 
     pub async fn setup_container(&self) -> Result<(), bollard::errors::Error> {
@@ -736,7 +792,7 @@ impl Server {
         }))
     }
 
-    pub async fn log_daemon(&self, message: String) {
+    pub fn log_daemon(&self, message: compact_str::CompactString) {
         self.websocket
             .send(websocket::WebsocketMessage::new(
                 websocket::WebsocketEvent::ServerDaemonMessage,
@@ -745,7 +801,7 @@ impl Server {
             .ok();
     }
 
-    pub async fn log_daemon_install(&self, message: String) {
+    pub fn log_daemon_install(&self, message: compact_str::CompactString) {
         self.websocket
             .send(websocket::WebsocketMessage::new(
                 websocket::WebsocketEvent::ServerInstallOutput,
@@ -754,7 +810,7 @@ impl Server {
             .ok();
     }
 
-    pub async fn log_daemon_with_prelude(&self, message: &str) {
+    pub fn log_daemon_with_prelude(&self, message: &str) {
         let prelude = ansi_term::Color::Yellow
             .bold()
             .paint(format!("[{} Daemon]:", self.app_state.config.app_name));
@@ -762,7 +818,7 @@ impl Server {
         self.websocket
             .send(websocket::WebsocketMessage::new(
                 websocket::WebsocketEvent::ServerConsoleOutput,
-                [format!(
+                [compact_str::format_compact!(
                     "{} {}",
                     prelude,
                     ansi_term::Style::new().bold().paint(message)
@@ -772,15 +828,14 @@ impl Server {
             .ok();
     }
 
-    pub async fn log_daemon_error(&self, message: &str) {
+    pub fn log_daemon_error(&self, message: &str) {
         self.log_daemon(
             ansi_term::Style::new()
                 .bold()
                 .on(ansi_term::Color::Red)
                 .paint(message)
-                .to_string(),
-        )
-        .await
+                .to_compact_string(),
+        );
     }
 
     pub fn get_daemon_error(&self, message: &str) -> websocket::WebsocketMessage {
@@ -790,7 +845,7 @@ impl Server {
                 .bold()
                 .on(ansi_term::Color::Red)
                 .paint(message)
-                .to_string()]
+                .to_compact_string()]
             .into(),
         )
     }
@@ -805,8 +860,7 @@ impl Server {
         if !quiet {
             self.log_daemon_with_prelude(
                 "Pulling Docker container image, this could take a few minutes to complete...",
-            )
-            .await;
+            );
         }
 
         if !image.ends_with("~") {
@@ -845,13 +899,14 @@ impl Server {
                                             .send(websocket::WebsocketMessage::new(
                                                 websocket::WebsocketEvent::ServerImagePullProgress,
                                                 [
-                                                    id,
+                                                    id.into(),
                                                     serde_json::to_string(&crate::models::PullProgress {
                                                         status: crate::models::PullProgressStatus::Pulling,
                                                         progress: progress_detail.current.unwrap_or_default(),
                                                         total: progress_detail.total.unwrap_or_default()
                                                     })
                                                     .unwrap()
+                                                    .into()
                                                 ].into(),
                                             ))
                                             .ok();
@@ -863,13 +918,14 @@ impl Server {
                                             .send(websocket::WebsocketMessage::new(
                                                 websocket::WebsocketEvent::ServerImagePullProgress,
                                                 [
-                                                    id,
+                                                    id.into(),
                                                     serde_json::to_string(&crate::models::PullProgress {
                                                         status: crate::models::PullProgressStatus::Extracting,
                                                         progress: progress_detail.current.unwrap_or_default(),
                                                         total: progress_detail.total.unwrap_or_default()
                                                     })
                                                     .unwrap()
+                                                    .into()
                                                 ].into(),
                                             ))
                                             .ok();
@@ -879,7 +935,7 @@ impl Server {
                                     self.websocket
                                         .send(websocket::WebsocketMessage::new(
                                             websocket::WebsocketEvent::ServerImagePullCompleted,
-                                            [id].into(),
+                                            [id.into()].into(),
                                         ))
                                         .ok();
                                 }
@@ -889,20 +945,22 @@ impl Server {
 
                         if let Some(status_str) = status.status {
                             if let Some(progress_detail) = status.progress_detail {
-                                self.log_daemon_install(format!(
-                                    "{status_str} {} of {}",
-                                    crate::utils::draw_progress_bar(
-                                        50usize.saturating_sub(status_str.len()),
-                                        progress_detail.current.unwrap_or_default() as f64,
-                                        progress_detail.total.unwrap_or_default() as f64
-                                    ),
-                                    human_bytes::human_bytes(
-                                        progress_detail.total.unwrap_or_default() as f64
-                                    ),
-                                ))
-                                .await;
+                                self.log_daemon_install(
+                                    format!(
+                                        "{status_str} {} of {}",
+                                        crate::utils::draw_progress_bar(
+                                            50usize.saturating_sub(status_str.len()),
+                                            progress_detail.current.unwrap_or_default() as f64,
+                                            progress_detail.total.unwrap_or_default() as f64
+                                        ),
+                                        human_bytes::human_bytes(
+                                            progress_detail.total.unwrap_or_default() as f64
+                                        ),
+                                    )
+                                    .into(),
+                                );
                             } else {
-                                self.log_daemon_install(status_str).await;
+                                self.log_daemon_install(status_str.into());
                             }
                         }
                     }
@@ -915,8 +973,7 @@ impl Server {
                         );
 
                         if !quiet {
-                            self.log_daemon_error(&format!("failed to pull image: {err}"))
-                                .await;
+                            self.log_daemon_error(&format!("failed to pull image: {err}"));
                         }
 
                         if let Ok(images) = self
@@ -948,8 +1005,7 @@ impl Server {
         }
 
         if !quiet {
-            self.log_daemon_with_prelude("Finished pulling Docker container image")
-                .await;
+            self.log_daemon_with_prelude("Finished pulling Docker container image");
         }
 
         tracing::info!(
@@ -1006,8 +1062,7 @@ impl Server {
 
                         server.sync_configuration().await;
 
-                        server.log_daemon_with_prelude("Updating process configuration files...")
-                            .await;
+                        server.log_daemon_with_prelude("Updating process configuration files...");
                         if let Err(err) = server.process_configuration
                             .read()
                             .await
@@ -1027,8 +1082,7 @@ impl Server {
                             );
                             server.log_daemon_with_prelude(
                                 "Ensuring file permissions are set correctly, this could take a few seconds...",
-                            )
-                            .await;
+                            );
 
                             server.filesystem.chown_path(&server.filesystem.base_path).await?;
                         }
@@ -1361,11 +1415,7 @@ impl Server {
             timeout.as_secs()
         );
 
-        self.log_daemon(format!(
-            "Killing server after {} seconds...",
-            timeout.as_secs()
-        ))
-        .await;
+        self.log_daemon(format!("Killing server after {} seconds...", timeout.as_secs()).into());
 
         let server = self.clone();
         tokio::spawn(async move {

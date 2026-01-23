@@ -5,6 +5,12 @@ use std::{
     sync::Arc,
 };
 
+/// A simple file wrapper that allows multiple independent read cursors to exist on a single file. (Mainly for archives)
+///
+/// # Cloning
+///
+/// Cloning a `MultiReader` will create a new reader with its own independent cursor (same position as the original), allowing
+/// multiple parts of code to read from the same file without interfering with each other's read positions.
 #[derive(Clone)]
 pub struct MultiReader {
     file: Arc<File>,

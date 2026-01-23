@@ -56,8 +56,8 @@ fn api_file_decompression_threads() -> usize {
 fn api_file_compression_threads() -> usize {
     2
 }
-fn api_upload_limit() -> usize {
-    100
+fn api_upload_limit() -> MiB {
+    100u64.into()
 }
 fn api_max_jwt_uses() -> usize {
     5
@@ -345,8 +345,8 @@ fn docker_container_pid_limit() -> u64 {
 fn docker_installer_limits_timeout() -> u64 {
     30 * 60
 }
-fn docker_installer_limits_memory() -> u64 {
-    1024
+fn docker_installer_limits_memory() -> MiB {
+    1024u64.into()
 }
 fn docker_installer_limits_cpu() -> u64 {
     100
@@ -386,6 +386,40 @@ fn remote_query_boot_servers_per_page() -> u64 {
 }
 fn remote_query_retry_limit() -> u64 {
     10
+}
+
+/// Represents a size in Mebibytes (MiB). The inner value is the number of MiB (not bytes!!).
+#[derive(
+    ToSchema, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default,
+)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct MiB(u64);
+
+impl MiB {
+    pub fn as_bytes(self) -> u64 {
+        self.0 * 1024 * 1024
+    }
+
+    pub fn as_kib(self) -> u64 {
+        self.0 * 1024
+    }
+
+    pub fn as_mib(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for MiB {
+    fn from(value: u64) -> Self {
+        MiB(value)
+    }
+}
+
+impl From<i64> for MiB {
+    fn from(value: i64) -> Self {
+        MiB(value as u64)
+    }
 }
 
 nestify::nest! {
@@ -451,8 +485,7 @@ nestify::nest! {
             #[serde(default = "api_file_compression_threads")]
             pub file_compression_threads: usize,
             #[serde(default = "api_upload_limit")]
-            /// MiB
-            pub upload_limit: usize,
+            pub upload_limit: MiB,
             #[serde(default = "api_max_jwt_uses")]
             pub max_jwt_uses: usize,
             #[serde(default)]
@@ -612,11 +645,9 @@ nestify::nest! {
             #[schema(inline)]
             pub backups: #[derive(ToSchema, Deserialize, Serialize, DefaultFromSerde)] #[serde(default)] pub struct SystemBackups {
                 #[serde(default)]
-                /// MiB/s
-                pub write_limit: u64,
+                pub write_limit: MiB,
                 #[serde(default)]
-                /// MiB/s
-                pub read_limit: u64,
+                pub read_limit: MiB,
                 #[serde(default)]
                 pub compression_level: crate::io::compression::CompressionLevel,
 
@@ -699,8 +730,7 @@ nestify::nest! {
             #[schema(inline)]
             pub transfers: #[derive(ToSchema, Deserialize, Serialize, DefaultFromSerde)] #[serde(default)] pub struct SystemTransfers {
                 #[serde(default)]
-                /// MiB/s
-                pub download_limit: u64,
+                pub download_limit: MiB,
             },
         },
         #[serde(default)]
@@ -781,8 +811,7 @@ nestify::nest! {
                 pub timeout: u64,
 
                 #[serde(default = "docker_installer_limits_memory")]
-                /// MiB
-                pub memory: u64,
+                pub memory: MiB,
                 #[serde(default = "docker_installer_limits_cpu")]
                 /// %
                 pub cpu: u64,
@@ -798,7 +827,7 @@ nestify::nest! {
 
                 #[serde(default)]
                 /// Memory Limit MiB -> Multiplier
-                pub multipliers: BTreeMap<i64, f64>,
+                pub multipliers: BTreeMap<MiB, f64>,
             },
 
             #[serde(default)]
@@ -862,11 +891,11 @@ impl DockerOverhead {
     /// means, <=1024MiB ram = 1.05 multiplier,
     /// <=2048MiB ram = 1.10 multiplier,
     /// >2048MiB ram = 1.05 multiplier (default_multiplier)
-    pub fn get_mutiplier(&self, memory: i64) -> f64 {
+    pub fn get_mutiplier(&self, memory: MiB) -> f64 {
         if !self.r#override {
-            if memory <= 2048 {
+            if memory.as_mib() <= 2048 {
                 return 1.15;
-            } else if memory <= 4096 {
+            } else if memory.as_mib() <= 4096 {
                 return 1.10;
             }
 
@@ -885,10 +914,10 @@ impl DockerOverhead {
     }
 
     #[inline]
-    pub fn get_memory(&self, memory: i64) -> i64 {
+    pub fn get_memory(&self, memory: MiB) -> MiB {
         let multiplier = self.get_mutiplier(memory);
 
-        (memory as f64 * multiplier) as i64
+        MiB((memory.as_mib() as f64 * multiplier) as u64)
     }
 }
 

@@ -28,7 +28,7 @@ mod post {
                     key: Option<String>,
                 }>,
 
-                upload_limit: Option<usize>,
+                upload_limit: Option<crate::config::MiB>,
             }>,
 
             #[schema(inline)]

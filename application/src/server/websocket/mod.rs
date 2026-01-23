@@ -1,5 +1,6 @@
 use super::permissions::Permissions;
 use axum::extract::ws::{CloseFrame, Message, WebSocket};
+use compact_str::ToCompactString;
 use futures_util::{SinkExt, stream::SplitSink};
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -156,17 +157,19 @@ pub struct WebsocketMessage {
     #[serde(deserialize_with = "string_vec_or_empty")]
     #[serde(serialize_with = "arc_vec")]
     #[schema(value_type = Vec<String>)]
-    pub args: Arc<[String]>,
+    pub args: Arc<[compact_str::CompactString]>,
 }
 
-fn string_vec_or_empty<'de, D>(deserializer: D) -> Result<Arc<[String]>, D::Error>
+fn string_vec_or_empty<'de, D>(
+    deserializer: D,
+) -> Result<Arc<[compact_str::CompactString]>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct StringVecVisitor(PhantomData<[String]>);
+    struct StringVecVisitor(PhantomData<[compact_str::CompactString]>);
 
     impl<'de> Visitor<'de> for StringVecVisitor {
-        type Value = Arc<[String]>;
+        type Value = Arc<[compact_str::CompactString]>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
             formatter.write_str("a string array or null")
@@ -177,7 +180,7 @@ where
             A: SeqAccess<'de>,
         {
             let mut vec = Vec::new();
-            while let Some(element) = seq.next_element::<Option<String>>()? {
+            while let Some(element) = seq.next_element::<Option<compact_str::CompactString>>()? {
                 if let Some(value) = element {
                     vec.push(value);
                 }
@@ -196,7 +199,7 @@ where
     deserializer.deserialize_any(StringVecVisitor(PhantomData))
 }
 
-fn arc_vec<S>(vec: &Arc<[String]>, serializer: S) -> Result<S::Ok, S::Error>
+fn arc_vec<S>(vec: &Arc<[compact_str::CompactString]>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -210,7 +213,7 @@ where
 
 impl WebsocketMessage {
     #[inline]
-    pub fn new(event: WebsocketEvent, args: Arc<[String]>) -> Self {
+    pub fn new(event: WebsocketEvent, args: Arc<[compact_str::CompactString]>) -> Self {
         Self { event, args }
     }
 }
@@ -287,7 +290,7 @@ impl ServerWebsocketHandler {
                 .bold()
                 .on(ansi_term::Color::Red)
                 .paint(message.into())
-                .to_string()]
+                .to_compact_string()]
             .into(),
         );
         let message = match serde_json::to_string(&message) {
@@ -320,7 +323,7 @@ impl ServerWebsocketHandler {
                 .bold()
                 .on(ansi_term::Color::Red)
                 .paint(message)
-                .to_string()]
+                .to_compact_string()]
             .into(),
         );
         let message = match serde_json::to_string(&message) {

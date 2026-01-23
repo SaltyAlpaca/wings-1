@@ -1,5 +1,6 @@
 use super::configuration::string_to_option;
 use anyhow::Context;
+use compact_str::ToCompactString;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -135,7 +136,7 @@ impl ServerInstaller {
             .websocket
             .send(super::websocket::WebsocketMessage::new(
                 super::websocket::WebsocketEvent::ServerInstallCompleted,
-                [successful.to_string()].into(),
+                [successful.to_compact_string()].into(),
             ))?;
 
         if successful
@@ -180,10 +181,7 @@ impl ServerInstaller {
         );
 
         self.server
-            .log_daemon(
-                "Starting installation process, this could take a few minutes...".to_string(),
-            )
-            .await;
+            .log_daemon("Starting installation process, this could take a few minutes...".into());
 
         if self.server.configuration.read().await.skip_egg_scripts && !force {
             self.unset_installing(true).await?;
@@ -345,11 +343,11 @@ impl ServerInstaller {
                                                     let newline_pos = search_start + pos;
 
                                                     if newline_pos - line_start <= 512 {
-                                                        let line = String::from_utf8_lossy(
+                                                        let line = compact_str::CompactString::from_utf8_lossy(
                                                             &buffer[line_start..newline_pos],
                                                         )
                                                         .trim()
-                                                        .to_string();
+                                                        .into();
                                                         installer
                                                             .server
                                                             .websocket
@@ -362,11 +360,11 @@ impl ServerInstaller {
                                                         line_start = newline_pos + 1;
                                                         search_start = line_start;
                                                     } else {
-                                                        let line = String::from_utf8_lossy(
+                                                        let line = compact_str::CompactString::from_utf8_lossy(
                                                             &buffer[line_start..(line_start + 512)],
                                                         )
                                                         .trim()
-                                                        .to_string();
+                                                        .into();
                                                         installer
                                                             .server
                                                             .websocket
@@ -382,11 +380,11 @@ impl ServerInstaller {
                                                 } else {
                                                     let current_line_length = buffer.len() - line_start;
                                                     if current_line_length > 512 {
-                                                        let line = String::from_utf8_lossy(
+                                                        let line = compact_str::CompactString::from_utf8_lossy(
                                                             &buffer[line_start..(line_start + 512)],
                                                         )
                                                         .trim()
-                                                        .to_string();
+                                                        .into();
                                                         installer
                                                             .server
                                                             .websocket
@@ -411,9 +409,9 @@ impl ServerInstaller {
                                         }
 
                                         if line_start < buffer.len() {
-                                            let line = String::from_utf8_lossy(&buffer[line_start..])
+                                            let line = compact_str::CompactString::from_utf8_lossy(&buffer[line_start..])
                                                 .trim()
-                                                .to_string();
+                                                .into();
                                             installer
                                                 .server
                                                 .websocket
@@ -645,11 +643,11 @@ impl ServerInstaller {
                                                 let newline_pos = search_start + pos;
 
                                                 if newline_pos - line_start <= 512 {
-                                                    let line = String::from_utf8_lossy(
+                                                    let line = compact_str::CompactString::from_utf8_lossy(
                                                         &buffer[line_start..newline_pos],
                                                     )
                                                     .trim()
-                                                    .to_string();
+                                                    .into();
                                                     installer
                                                         .server
                                                         .websocket
@@ -662,11 +660,11 @@ impl ServerInstaller {
                                                     line_start = newline_pos + 1;
                                                     search_start = line_start;
                                                 } else {
-                                                    let line = String::from_utf8_lossy(
+                                                    let line = compact_str::CompactString::from_utf8_lossy(
                                                         &buffer[line_start..(line_start + 512)],
                                                     )
                                                     .trim()
-                                                    .to_string();
+                                                    .into();
                                                     installer
                                                         .server
                                                         .websocket
@@ -682,11 +680,11 @@ impl ServerInstaller {
                                             } else {
                                                 let current_line_length = buffer.len() - line_start;
                                                 if current_line_length > 512 {
-                                                    let line = String::from_utf8_lossy(
+                                                    let line = compact_str::CompactString::from_utf8_lossy(
                                                         &buffer[line_start..(line_start + 512)],
                                                     )
                                                     .trim()
-                                                    .to_string();
+                                                    .into();
                                                     installer
                                                         .server
                                                         .websocket
@@ -711,9 +709,9 @@ impl ServerInstaller {
                                     }
 
                                     if line_start < buffer.len() {
-                                        let line = String::from_utf8_lossy(&buffer[line_start..])
+                                        let line = compact_str::CompactString::from_utf8_lossy(&buffer[line_start..])
                                             .trim()
-                                            .to_string();
+                                            .into();
                                         installer
                                             .server
                                             .websocket
@@ -871,13 +869,24 @@ impl ServerInstaller {
 
         if resources.memory_reservation.is_some_and(|m| {
             m > 0
-                && m < self.server.app_state.config.docker.installer_limits.memory as i64
-                    * 1024
-                    * 1024
+                && m < self
+                    .server
+                    .app_state
+                    .config
+                    .docker
+                    .installer_limits
+                    .memory
+                    .as_bytes() as i64
         }) {
             resources.memory = None;
             resources.memory_reservation = Some(
-                self.server.app_state.config.docker.installer_limits.memory as i64 * 1024 * 1024,
+                self.server
+                    .app_state
+                    .config
+                    .docker
+                    .installer_limits
+                    .memory
+                    .as_bytes() as i64,
             );
             resources.memory_swap = None;
         }

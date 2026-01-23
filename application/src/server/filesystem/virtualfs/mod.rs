@@ -417,18 +417,20 @@ pub trait VirtualReadableFilesystem: Send + Sync {
     ) -> Result<Box<dyn DirectoryWalk + Send + Sync + 'a>, anyhow::Error>;
     async fn async_walk_dir_files<'a>(
         &'a self,
-        path: PathBuf,
+        path: &(dyn AsRef<Path> + Send + Sync),
         file_paths: Vec<PathBuf>,
         is_ignored: IsIgnoredFn,
     ) -> Result<Box<dyn DirectoryWalk + Send + Sync + 'a>, anyhow::Error> {
-        let is_ignored = move |file_type, path| {
-            if file_paths.iter().any(|p| p.starts_with(&path)) {
+        let root_path = path.as_ref().to_path_buf();
+        let is_ignored = move |file_type, path: PathBuf| {
+            let stripped_path = path.strip_prefix(&root_path).unwrap_or(&path);
+            if file_paths.iter().any(|p| stripped_path.starts_with(p)) {
                 is_ignored(file_type, path)
             } else {
-                Some(path)
+                None
             }
         };
-        self.async_walk_dir(&path, IsIgnoredFn::from(is_ignored))
+        self.async_walk_dir(path, IsIgnoredFn::from(is_ignored))
             .await
     }
     async fn async_walk_dir_stream<'a>(
@@ -438,18 +440,20 @@ pub trait VirtualReadableFilesystem: Send + Sync {
     ) -> Result<Box<dyn DirectoryStreamWalk + Send + Sync + 'a>, anyhow::Error>;
     async fn async_walk_dir_files_stream<'a>(
         &'a self,
-        path: PathBuf,
+        path: &(dyn AsRef<Path> + Send + Sync),
         file_paths: Vec<PathBuf>,
         is_ignored: IsIgnoredFn,
     ) -> Result<Box<dyn DirectoryStreamWalk + Send + Sync + 'a>, anyhow::Error> {
+        let root_path = path.as_ref().to_path_buf();
         let is_ignored = move |file_type, path: PathBuf| {
-            if file_paths.iter().any(|p| path.starts_with(p)) {
+            let stripped_path = path.strip_prefix(&root_path).unwrap_or(&path);
+            if file_paths.iter().any(|p| stripped_path.starts_with(p)) {
                 is_ignored(file_type, path)
             } else {
                 None
             }
         };
-        self.async_walk_dir_stream(&path, IsIgnoredFn::from(is_ignored))
+        self.async_walk_dir_stream(path, IsIgnoredFn::from(is_ignored))
             .await
     }
 
@@ -489,8 +493,10 @@ pub trait VirtualReadableFilesystem: Send + Sync {
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
     ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+        let root_path = path.as_ref().to_path_buf();
         let is_ignored = move |file_type, path: PathBuf| {
-            if file_paths.iter().any(|p| path.starts_with(p)) {
+            let stripped_path = path.strip_prefix(&root_path).unwrap_or(&path);
+            if file_paths.iter().any(|p| stripped_path.starts_with(p)) {
                 is_ignored(file_type, path)
             } else {
                 None

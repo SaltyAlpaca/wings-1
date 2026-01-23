@@ -179,7 +179,7 @@ mod post {
                                 let reader = AbortReader::new(reader, listener.clone());
                                 let reader = LimitedReader::new_with_bytes_per_second(
                                     reader,
-                                    state.config.system.transfers.download_limit * 1024 * 1024,
+                                    state.config.system.transfers.download_limit.as_bytes(),
                                 );
                                 let reader =
                                     HashReader::new_with_hasher(reader, sha2::Sha256::new());
@@ -409,9 +409,7 @@ mod post {
                                         let reader = AbortReader::new(reader, listener.clone());
                                         let reader = LimitedReader::new_with_bytes_per_second(
                                             reader,
-                                            state.config.system.transfers.download_limit
-                                                * 1024
-                                                * 1024,
+                                            state.config.system.transfers.download_limit.as_bytes(),
                                         );
                                         let mut reader = HashReader::new_with_hasher(
                                             reader,
@@ -603,7 +601,7 @@ mod post {
                                 .websocket
                                 .send(crate::server::websocket::WebsocketMessage::new(
                                     crate::server::websocket::WebsocketEvent::ServerTransferStatus,
-                                    ["completed".to_string()].into(),
+                                    ["completed".into()].into(),
                                 ))
                                 .ok();
                         }
@@ -649,7 +647,7 @@ mod post {
                             .websocket
                             .send(crate::server::websocket::WebsocketMessage::new(
                                 crate::server::websocket::WebsocketEvent::ServerTransferStatus,
-                                ["completed".to_string()].into(),
+                                ["completed".into()].into(),
                             ))
                             .ok();
                     }

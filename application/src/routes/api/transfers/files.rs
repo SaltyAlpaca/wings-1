@@ -171,7 +171,7 @@ mod post {
                                         let reader = tokio_util::io::SyncIoBridge::new(reader);
                                         let reader = LimitedReader::new_with_bytes_per_second(
                                             reader,
-                                            state.config.system.transfers.download_limit * 1024 * 1024,
+                                            state.config.system.transfers.download_limit.as_bytes(),
                                         );
                                         let reader = HashReader::new_with_hasher(reader, sha2::Sha256::new());
                                         let reader = CompressionReader::new(
