@@ -13,7 +13,6 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
 use utoipa::ToSchema;
 
@@ -921,6 +920,11 @@ impl DockerOverhead {
     }
 }
 
+pub struct ConfigGuard(
+    pub tracing_appender::non_blocking::WorkerGuard,
+    pub tracing_appender::non_blocking::WorkerGuard,
+);
+
 pub struct Config {
     inner: UnsafeCell<InnerConfig>,
 
@@ -939,7 +943,7 @@ impl Config {
         debug: bool,
         ignore_debug: bool,
         ignore_certificate_errors: bool,
-    ) -> Result<(Arc<Self>, WorkerGuard), anyhow::Error> {
+    ) -> Result<(Arc<Self>, ConfigGuard), anyhow::Error> {
         let file = File::open(path).context(format!("failed to open config file {path}"))?;
         let reader = std::io::BufReader::new(file);
         let config: InnerConfig = serde_yml::from_reader(reader)
@@ -957,6 +961,8 @@ impl Config {
         };
 
         config.ensure_directories()?;
+
+        let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
 
         let latest_log_path = std::path::Path::new(&config.system.log_directory).join("wings.log");
         let latest_file = std::fs::OpenOptions::new()
@@ -991,7 +997,7 @@ impl Config {
         tracing::subscriber::set_global_default(
             tracing_subscriber::fmt()
                 .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc_3339())
-                .with_writer(std::io::stdout.and(file_appender))
+                .with_writer(stdout_writer.and(file_appender))
                 .with_target(false)
                 .with_level(true)
                 .with_file(true)
@@ -1006,7 +1012,7 @@ impl Config {
 
         config.validate()?;
 
-        Ok((Arc::new(config), guard))
+        Ok((Arc::new(config), ConfigGuard(guard, stdout_guard)))
     }
 
     pub fn save_new(path: &str, config: InnerConfig) -> Result<(), anyhow::Error> {
