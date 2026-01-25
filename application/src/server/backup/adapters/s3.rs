@@ -238,7 +238,7 @@ impl BackupCreateExt for S3Backup {
                 server.filesystem.clone(),
                 writer,
                 Path::new(""),
-                sources.into_iter().map(PathBuf::from).collect(),
+                sources,
                 Some(Arc::clone(&progress)),
                 ignore.into(),
                 crate::server::filesystem::archive::create::CreateTarOptions {

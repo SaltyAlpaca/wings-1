@@ -247,7 +247,7 @@ impl BackupExt for ZfsBackup {
                                 filesystem,
                                 writer,
                                 Path::new(""),
-                                names.into_iter().map(PathBuf::from).collect(),
+                                names,
                                 None,
                                 ignore.into(),
                                 crate::server::filesystem::archive::create::CreateZipOptions {
@@ -267,7 +267,7 @@ impl BackupExt for ZfsBackup {
                             filesystem,
                             writer,
                             Path::new(""),
-                            names.into_iter().map(PathBuf::from).collect(),
+                            names,
                             None,
                             ignore.into(),
                             crate::server::filesystem::archive::create::CreateTarOptions {

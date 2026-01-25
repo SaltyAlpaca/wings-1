@@ -117,6 +117,7 @@ pub async fn set_server_transfer(
 pub async fn set_server_startup_variable(
     client: &Client,
     uuid: uuid::Uuid,
+    schedule: Option<uuid::Uuid>,
     env_variable: &str,
     value: &str,
 ) -> Result<(), anyhow::Error> {
@@ -124,6 +125,7 @@ pub async fn set_server_startup_variable(
         .client
         .put(format!("{}/servers/{}/startup/variables", client.url, uuid))
         .json(&json!({
+            "schedule_uuid": schedule,
             "env_variable": env_variable,
             "value": value,
         }))
@@ -137,12 +139,14 @@ pub async fn set_server_startup_variable(
 pub async fn set_server_startup_command(
     client: &Client,
     uuid: uuid::Uuid,
+    schedule: Option<uuid::Uuid>,
     command: &str,
 ) -> Result<(), anyhow::Error> {
     client
         .client
         .put(format!("{}/servers/{}/startup/command", client.url, uuid))
         .json(&json!({
+            "schedule_uuid": schedule,
             "command": command,
         }))
         .send()
@@ -155,6 +159,7 @@ pub async fn set_server_startup_command(
 pub async fn set_server_startup_docker_image(
     client: &Client,
     uuid: uuid::Uuid,
+    schedule: Option<uuid::Uuid>,
     image: &str,
 ) -> Result<(), anyhow::Error> {
     client
@@ -164,6 +169,7 @@ pub async fn set_server_startup_docker_image(
             client.url, uuid
         ))
         .json(&json!({
+            "schedule_uuid": schedule,
             "image": image,
         }))
         .send()

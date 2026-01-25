@@ -141,6 +141,7 @@ impl russh::server::Handler for SshSession {
                     metadata: Some(json!({
                         "method": "password",
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;
@@ -226,6 +227,7 @@ impl russh::server::Handler for SshSession {
                     metadata: Some(json!({
                         "method": "public_key",
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;

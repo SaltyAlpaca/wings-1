@@ -10,7 +10,7 @@ use cap_std::fs::PermissionsExt;
 use chrono::{Datelike, Timelike};
 use std::{
     io::{Read, Seek, Write},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -25,7 +25,7 @@ pub async fn create_zip<W: Write + Seek + Send + 'static>(
     filesystem: crate::server::filesystem::cap::CapFilesystem,
     destination: W,
     base: &Path,
-    sources: Vec<PathBuf>,
+    sources: Vec<impl AsRef<Path> + Send + 'static>,
     bytes_archived: Option<Arc<AtomicU64>>,
     is_ignored: IsIgnoredFn,
     options: CreateZipOptions,
@@ -39,8 +39,8 @@ pub async fn create_zip<W: Write + Seek + Send + 'static>(
 
         let mut read_buffer = vec![0; crate::BUFFER_SIZE];
         for source in sources {
-            let relative = source;
-            let source = base.join(&relative);
+            let relative = source.as_ref();
+            let source = base.join(relative);
 
             let source_metadata = match filesystem.symlink_metadata(&source) {
                 Ok(metadata) => metadata,
@@ -180,7 +180,7 @@ pub async fn create_zip_streaming<W: Write + Send + 'static>(
     filesystem: crate::server::filesystem::cap::CapFilesystem,
     destination: W,
     base: &Path,
-    sources: Vec<PathBuf>,
+    sources: Vec<impl AsRef<Path> + Send + 'static>,
     bytes_archived: Option<Arc<AtomicU64>>,
     is_ignored: IsIgnoredFn,
     options: CreateZipOptions,
@@ -194,8 +194,8 @@ pub async fn create_zip_streaming<W: Write + Send + 'static>(
 
         let mut read_buffer = vec![0; crate::BUFFER_SIZE];
         for source in sources {
-            let relative = source;
-            let source = base.join(&relative);
+            let relative = source.as_ref();
+            let source = base.join(relative);
 
             let source_metadata = match filesystem.symlink_metadata(&source) {
                 Ok(metadata) => metadata,

@@ -79,6 +79,7 @@ pub struct ApiActivity {
     metadata: Option<serde_json::Value>,
 
     ip: Option<compact_str::CompactString>,
+    schedule: Option<uuid::Uuid>,
     timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -89,6 +90,7 @@ pub struct Activity {
     pub metadata: Option<serde_json::Value>,
 
     pub ip: Option<IpAddr>,
+    pub schedule: Option<uuid::Uuid>,
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -267,6 +269,7 @@ impl ActivityManager {
                                         event: activity.event,
                                         metadata: activity.metadata,
                                         ip: activity.ip.map(|ip| ip.to_compact_string()),
+                                        schedule: activity.schedule,
                                         timestamp: activity.timestamp,
                                     })
                                     .collect(),

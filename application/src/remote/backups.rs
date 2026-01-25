@@ -125,6 +125,7 @@ pub async fn backup_restic_configuration(
 pub async fn create_backup(
     client: &Client,
     server: uuid::Uuid,
+    schedule: Option<uuid::Uuid>,
     name: Option<&str>,
     ignored_files: &[impl Serialize + AsRef<str>],
 ) -> Result<(BackupAdapter, uuid::Uuid), anyhow::Error> {
@@ -133,6 +134,7 @@ pub async fn create_backup(
             .client
             .post(format!("{}/servers/{}/backups", client.url, server))
             .json(&json!({
+                "schedule_uuid": schedule,
                 "name": name,
                 "ignored_files": ignored_files,
             }))

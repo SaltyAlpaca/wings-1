@@ -239,34 +239,37 @@ impl Client {
     pub async fn set_server_startup_variable(
         &self,
         uuid: uuid::Uuid,
+        schedule: Option<uuid::Uuid>,
         env_variable: &str,
         value: &str,
     ) -> Result<(), anyhow::Error> {
         tracing::info!("setting server startup variable");
 
-        super::servers::set_server_startup_variable(self, uuid, env_variable, value).await
+        super::servers::set_server_startup_variable(self, uuid, schedule, env_variable, value).await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn set_server_startup_command(
         &self,
         uuid: uuid::Uuid,
+        schedule: Option<uuid::Uuid>,
         command: &str,
     ) -> Result<(), anyhow::Error> {
         tracing::info!("setting server startup command");
 
-        super::servers::set_server_startup_command(self, uuid, command).await
+        super::servers::set_server_startup_command(self, uuid, schedule, command).await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn set_server_startup_docker_image(
         &self,
         uuid: uuid::Uuid,
+        schedule: Option<uuid::Uuid>,
         image: &str,
     ) -> Result<(), anyhow::Error> {
         tracing::info!("setting server startup docker image");
 
-        super::servers::set_server_startup_docker_image(self, uuid, image).await
+        super::servers::set_server_startup_docker_image(self, uuid, schedule, image).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -333,11 +336,12 @@ impl Client {
     pub async fn create_backup(
         &self,
         server: uuid::Uuid,
+        schedule: Option<uuid::Uuid>,
         name: Option<&str>,
         ignored_files: &[impl Serialize + Debug + AsRef<str>],
     ) -> Result<(BackupAdapter, uuid::Uuid), anyhow::Error> {
         tracing::info!("creating backup");
 
-        super::backups::create_backup(self, server, name, ignored_files).await
+        super::backups::create_backup(self, server, schedule, name, ignored_files).await
     }
 }

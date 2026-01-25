@@ -341,6 +341,7 @@ impl ScheduleAction {
                                 user: None,
                                 ip: None,
                                 metadata: None,
+                                schedule: Some(execution_context.schedule_uuid),
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -387,6 +388,7 @@ impl ScheduleAction {
                                 user: None,
                                 ip: None,
                                 metadata: None,
+                                schedule: Some(execution_context.schedule_uuid),
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -437,6 +439,7 @@ impl ScheduleAction {
                                 user: None,
                                 ip: None,
                                 metadata: None,
+                                schedule: Some(execution_context.schedule_uuid),
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -463,6 +466,7 @@ impl ScheduleAction {
                                 user: None,
                                 ip: None,
                                 metadata: None,
+                                schedule: Some(execution_context.schedule_uuid),
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -494,6 +498,7 @@ impl ScheduleAction {
                                 metadata: Some(serde_json::json!({
                                     "command": command,
                                 })),
+                                schedule: Some(execution_context.schedule_uuid),
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -521,7 +526,12 @@ impl ScheduleAction {
                 let (adapter, uuid) = match state
                     .config
                     .client
-                    .create_backup(server.uuid, name, ignored_files)
+                    .create_backup(
+                        server.uuid,
+                        Some(execution_context.schedule_uuid),
+                        name,
+                        ignored_files,
+                    )
                     .await
                 {
                     Ok(result) => result,
@@ -624,6 +634,7 @@ impl ScheduleAction {
                             "directory": raw_root,
                             "name": name,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -751,6 +762,7 @@ impl ScheduleAction {
                         metadata: Some(serde_json::json!({
                             "file": file_path,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -860,6 +872,7 @@ impl ScheduleAction {
                             "file": file,
                             "name": destination,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -914,6 +927,7 @@ impl ScheduleAction {
                             "directory": raw_root,
                             "files": files,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -988,6 +1002,7 @@ impl ScheduleAction {
                             "directory": raw_root,
                             "files": files,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -1107,7 +1122,7 @@ impl ScheduleAction {
                                             server.filesystem.clone(),
                                             writer,
                                             &root,
-                                            files.into_iter().map(PathBuf::from).collect(),
+                                            files,
                                             Some(progress),
                                             ignored.into(),
                                             crate::server::filesystem::archive::create::CreateTarOptions {
@@ -1127,7 +1142,7 @@ impl ScheduleAction {
                                             server.filesystem.clone(),
                                             writer,
                                             &root,
-                                            files.into_iter().map(PathBuf::from).collect(),
+                                            files,
                                             Some(progress),
                                             ignored.into(),
                                             crate::server::filesystem::archive::create::CreateZipOptions {
@@ -1145,7 +1160,7 @@ impl ScheduleAction {
                                             server.filesystem.clone(),
                                             writer,
                                             &root,
-                                            files.into_iter().map(PathBuf::from).collect(),
+                                            files,
                                             Some(progress),
                                             ignored.into(),
                                             crate::server::filesystem::archive::create::Create7zOptions {
@@ -1178,6 +1193,7 @@ impl ScheduleAction {
                             "name": name,
                             "files": files,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -1283,6 +1299,7 @@ impl ScheduleAction {
                             "directory": root.display().to_string(),
                             "file": file,
                         })),
+                        schedule: Some(execution_context.schedule_uuid),
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -1316,7 +1333,12 @@ impl ScheduleAction {
                 match state
                     .config
                     .client
-                    .set_server_startup_variable(server.uuid, env_variable, value)
+                    .set_server_startup_variable(
+                        server.uuid,
+                        Some(execution_context.schedule_uuid),
+                        env_variable,
+                        value,
+                    )
                     .await
                 {
                     Ok(()) => {}
@@ -1342,7 +1364,11 @@ impl ScheduleAction {
                 match state
                     .config
                     .client
-                    .set_server_startup_command(server.uuid, command)
+                    .set_server_startup_command(
+                        server.uuid,
+                        Some(execution_context.schedule_uuid),
+                        command,
+                    )
                     .await
                 {
                     Ok(()) => {}
@@ -1368,7 +1394,11 @@ impl ScheduleAction {
                 match state
                     .config
                     .client
-                    .set_server_startup_docker_image(server.uuid, image)
+                    .set_server_startup_docker_image(
+                        server.uuid,
+                        Some(execution_context.schedule_uuid),
+                        image,
+                    )
                     .await
                 {
                     Ok(()) => {}

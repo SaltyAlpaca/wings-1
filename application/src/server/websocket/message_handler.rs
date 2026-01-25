@@ -110,6 +110,7 @@ pub async fn handle_message(
                                 user: Some(websocket_handler.get_jwt().await?.user_uuid),
                                 ip: user_ip,
                                 metadata: None,
+                                schedule: None,
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -173,6 +174,7 @@ pub async fn handle_message(
                                 user: Some(websocket_handler.get_jwt().await?.user_uuid),
                                 ip: user_ip,
                                 metadata: None,
+                                schedule: None,
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -240,6 +242,7 @@ pub async fn handle_message(
                                 user: Some(websocket_handler.get_jwt().await?.user_uuid),
                                 ip: user_ip,
                                 metadata: None,
+                                schedule: None,
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -286,6 +289,7 @@ pub async fn handle_message(
                                 user: Some(websocket_handler.get_jwt().await?.user_uuid),
                                 ip: user_ip,
                                 metadata: None,
+                                schedule: None,
                                 timestamp: chrono::Utc::now(),
                             })
                             .await;
@@ -333,6 +337,7 @@ pub async fn handle_message(
                             metadata: Some(json!({
                                 "command": raw_command,
                             })),
+                            schedule: None,
                             timestamp: chrono::Utc::now(),
                         })
                         .await;

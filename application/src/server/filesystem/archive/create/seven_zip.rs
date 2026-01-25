@@ -12,7 +12,7 @@ use sevenz_rust2::{
 };
 use std::{
     io::{Read, Seek, Write},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -28,7 +28,7 @@ pub async fn create_7z<W: Write + Seek + Send + 'static>(
     filesystem: crate::server::filesystem::cap::CapFilesystem,
     destination: W,
     base: &Path,
-    sources: Vec<PathBuf>,
+    sources: Vec<impl AsRef<Path> + Send + 'static>,
     bytes_archived: Option<Arc<AtomicU64>>,
     is_ignored: IsIgnoredFn,
     options: Create7zOptions,
@@ -53,8 +53,8 @@ pub async fn create_7z<W: Write + Seek + Send + 'static>(
         let mut directory_entries = chunked_vec::ChunkedVec::new();
 
         for source in sources {
-            let relative = source;
-            let source = base.join(&relative);
+            let relative = source.as_ref();
+            let source = base.join(relative);
 
             let source_metadata = match filesystem.symlink_metadata(&source) {
                 Ok(metadata) => metadata,
@@ -70,7 +70,7 @@ pub async fn create_7z<W: Write + Seek + Send + 'static>(
                 .map_or(None, |mtime| NtTime::try_from(mtime.into_std()).ok());
 
             if source_metadata.is_dir() {
-                directory_entries.push((relative, mtime));
+                directory_entries.push((relative.to_path_buf(), mtime));
                 if let Some(bytes_archived) = &bytes_archived {
                     bytes_archived.fetch_add(source_metadata.len(), Ordering::SeqCst);
                 }

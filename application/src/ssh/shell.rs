@@ -104,6 +104,7 @@ impl ShellSession {
                                     user: Some(self.user_uuid),
                                     ip: Some(self.user_ip),
                                     metadata: None,
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -155,6 +156,7 @@ impl ShellSession {
                                     user: Some(self.user_uuid),
                                     ip: Some(self.user_ip),
                                     metadata: None,
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -207,6 +209,7 @@ impl ShellSession {
                                     user: Some(self.user_uuid),
                                     ip: Some(self.user_ip),
                                     metadata: None,
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -241,6 +244,7 @@ impl ShellSession {
                                     user: Some(self.user_uuid),
                                     ip: Some(self.user_ip),
                                     metadata: None,
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -494,6 +498,7 @@ impl ShellSession {
                                                 metadata: Some(json!({
                                                     "command": line,
                                                 })),
+                                                schedule: None,
                                                 timestamp: chrono::Utc::now(),
                                             })
                                             .await;

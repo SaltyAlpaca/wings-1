@@ -171,7 +171,7 @@ impl BackupCreateExt for WingsBackup {
                         server.filesystem.clone(),
                         writer,
                         Path::new(""),
-                        sources.into_iter().map(PathBuf::from).collect(),
+                        sources,
                         Some(progress),
                         ignore.into(),
                         crate::server::filesystem::archive::create::CreateTarOptions {
@@ -199,7 +199,7 @@ impl BackupCreateExt for WingsBackup {
                         server.filesystem.clone(),
                         writer,
                         Path::new(""),
-                        sources.into_iter().map(PathBuf::from).collect(),
+                        sources,
                         Some(progress),
                         ignore.into(),
                         crate::server::filesystem::archive::create::CreateZipOptions {
@@ -218,7 +218,7 @@ impl BackupCreateExt for WingsBackup {
                         server.filesystem.clone(),
                         writer,
                         Path::new(""),
-                        sources.into_iter().map(PathBuf::from).collect(),
+                        sources,
                         Some(progress),
                         ignore.into(),
                         crate::server::filesystem::archive::create::Create7zOptions {

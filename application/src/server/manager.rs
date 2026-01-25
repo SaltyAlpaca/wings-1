@@ -64,44 +64,12 @@ impl ServerManager {
             server.initialize_schedules().await;
             server.filesystem.attach().await;
 
-            if let Some((reinstall, container_script)) = installing.remove(&server.uuid) {
-                tokio::spawn({
-                    let server = server.clone();
+            let spawn_start_task = {
+                let semaphore = Arc::clone(&semaphore);
+                let server = server.clone();
 
-                    async move {
-                        tracing::info!(
-                            server = %server.uuid,
-                            "restoring installing state {:?}",
-                            state
-                        );
-
-                        let mut installer = Arc::new(
-                            super::installation::ServerInstaller::new(
-                                &server,
-                                reinstall,
-                                Some(container_script),
-                            )
-                            .await,
-                        );
-
-                        if let Err(err) = installer.attach().await {
-                            tracing::error!(
-                                server = %server.uuid,
-                                "failed to attach installation container: {:#?}",
-                                err
-                            );
-                            return;
-                        }
-
-                        server.installer.write().await.replace(installer);
-                    }
-                });
-            } else if app_state.config.remote_query.boot_servers_per_page > 0 {
-                tokio::spawn({
-                    let semaphore = Arc::clone(&semaphore);
-                    let server = server.clone();
-
-                    async move {
+                move || {
+                    tokio::spawn(async move {
                         tracing::info!(
                             server = %server.uuid,
                             "restoring server state {:?}",
@@ -144,8 +112,49 @@ impl ServerManager {
 
                             server.start(None, false).await.ok();
                         }
+                    });
+                }
+            };
+
+            if let Some((reinstall, container_script)) = installing.remove(&server.uuid) {
+                let boot_servers_per_page = app_state.config.remote_query.boot_servers_per_page;
+
+                tokio::spawn({
+                    let server = server.clone();
+
+                    async move {
+                        tracing::info!(
+                            server = %server.uuid,
+                            "restoring installing state {:?}",
+                            state
+                        );
+
+                        let mut installer = Arc::new(
+                            super::installation::ServerInstaller::new(
+                                &server,
+                                reinstall,
+                                Some(container_script),
+                            )
+                            .await,
+                        );
+
+                        if let Err(err) = installer.attach().await {
+                            tracing::error!(
+                                server = %server.uuid,
+                                "failed to attach installation container: {:#?}",
+                                err
+                            );
+                            if boot_servers_per_page > 0 {
+                                spawn_start_task();
+                            }
+                            return;
+                        }
+
+                        server.installer.write().await.replace(installer);
                     }
                 });
+            } else if app_state.config.remote_query.boot_servers_per_page > 0 {
+                spawn_start_task();
             } else {
                 match server.attach_container().await {
                     Ok(_) => {

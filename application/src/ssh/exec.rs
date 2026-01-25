@@ -83,6 +83,7 @@ impl ExecSession {
                                         "directory": destination.trim(),
                                         "file": path.trim(),
                                     })),
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -150,6 +151,7 @@ impl ExecSession {
                                         "directory": base.to_string_lossy(),
                                         "name": destination.to_string_lossy(),
                                     })),
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;
@@ -236,6 +238,7 @@ impl ExecSession {
                                     metadata: Some(json!({
                                         "command": command,
                                     })),
+                                    schedule: None,
                                     timestamp: chrono::Utc::now(),
                                 })
                                 .await;

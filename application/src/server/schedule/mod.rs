@@ -80,12 +80,19 @@ pub struct ScheduleStatus {
     pub step: Option<uuid::Uuid>,
 }
 
-#[derive(Default)]
 pub struct ScheduleExecutionContext {
+    schedule_uuid: uuid::Uuid,
     variables: HashMap<compact_str::CompactString, compact_str::CompactString>,
 }
 
 impl ScheduleExecutionContext {
+    pub fn new(schedule_uuid: uuid::Uuid) -> Self {
+        Self {
+            schedule_uuid,
+            variables: HashMap::new(),
+        }
+    }
+
     pub fn resolve_parameter<'a>(
         &'a self,
         parameter: &'a actions::ScheduleDynamicParameter,
@@ -146,6 +153,7 @@ impl Schedule {
         let next_execution_context = Arc::new(Mutex::new(None));
 
         let (triggers, trigger_tasks) = Self::create_trigger_tasks(
+            raw_schedule.uuid,
             server.clone(),
             raw_schedule.triggers,
             Arc::clone(&next_execution_context),
@@ -220,6 +228,7 @@ impl Schedule {
         }
 
         let (triggers, tasks) = Self::create_trigger_tasks(
+            self.uuid,
             server,
             triggers,
             Arc::clone(&self.next_execution_context),
@@ -278,11 +287,10 @@ impl Schedule {
                 let raw_actions = Arc::clone(&*raw_actions_lock);
                 drop(raw_actions_lock);
 
-                let mut execution_context = next_execution_context
-                    .lock()
-                    .await
-                    .take()
-                    .unwrap_or_default();
+                let mut execution_context = match next_execution_context.lock().await.take() {
+                    Some(context) => context,
+                    None => ScheduleExecutionContext::new(uuid),
+                };
 
                 let mut errors = HashMap::new();
                 let mut successful = true;
@@ -374,6 +382,7 @@ impl Schedule {
     }
 
     fn create_trigger_tasks(
+        schedule_uuid: uuid::Uuid,
         server: crate::server::Server,
         raw_triggers: Vec<ScheduleTrigger>,
         nest_execution_context: Arc<Mutex<Option<ScheduleExecutionContext>>>,
@@ -458,7 +467,7 @@ impl Schedule {
                                     if line.contains(&contains) {
                                         if let Some(output_into) = &output_into {
                                             let mut execution_context =
-                                                ScheduleExecutionContext::default();
+                                                ScheduleExecutionContext::new(schedule_uuid);
                                             execution_context.store_variable(
                                                 output_into.clone(),
                                                 line.to_compact_string(),

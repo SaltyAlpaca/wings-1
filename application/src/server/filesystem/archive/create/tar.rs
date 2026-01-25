@@ -27,7 +27,7 @@ pub async fn create_tar<W: Write + Send + 'static>(
     filesystem: crate::server::filesystem::cap::CapFilesystem,
     destination: W,
     base: &Path,
-    sources: Vec<PathBuf>,
+    sources: Vec<impl AsRef<Path> + Send + 'static>,
     bytes_archived: Option<Arc<AtomicU64>>,
     is_ignored: IsIgnoredFn,
     options: CreateTarOptions,
@@ -46,8 +46,8 @@ pub async fn create_tar<W: Write + Send + 'static>(
         let mut archive = tar::Builder::new(writer);
 
         for source in sources {
-            let relative = source;
-            let source = base.join(&relative);
+            let relative = source.as_ref();
+            let source = base.join(relative);
 
             let source_metadata = match filesystem.symlink_metadata(&source) {
                 Ok(metadata) => metadata,

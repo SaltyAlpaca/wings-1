@@ -377,6 +377,7 @@ impl russh_sftp::server::Handler for SftpSession {
                     metadata: Some(json!({
                         "files": [self.server.filesystem.relative_path(&path)],
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;
@@ -432,6 +433,7 @@ impl russh_sftp::server::Handler for SftpSession {
                     metadata: Some(json!({
                         "files": [self.server.filesystem.relative_path(&path)],
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;
@@ -519,6 +521,7 @@ impl russh_sftp::server::Handler for SftpSession {
                 metadata: Some(json!({
                     "files": [self.server.filesystem.relative_path(path)],
                 })),
+                schedule: None,
                 timestamp: chrono::Utc::now(),
             })
             .await;
@@ -589,6 +592,7 @@ impl russh_sftp::server::Handler for SftpSession {
                     }
                 ],
             })),
+            schedule: None,
             timestamp: chrono::Utc::now(),
         };
 
@@ -873,6 +877,7 @@ impl russh_sftp::server::Handler for SftpSession {
                 metadata: Some(json!({
                     "files": [self.server.filesystem.relative_path(&linkpath)],
                 })),
+                schedule: None,
                 timestamp: chrono::Utc::now(),
             })
             .await;
@@ -998,6 +1003,7 @@ impl russh_sftp::server::Handler for SftpSession {
                     metadata: Some(json!({
                         "files": [self.server.filesystem.relative_path(&path)],
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;
@@ -1452,6 +1458,7 @@ impl russh_sftp::server::Handler for SftpSession {
                         metadata: Some(json!({
                             "files": [self.server.filesystem.relative_path(destination_path)],
                         })),
+                        schedule: None,
                         timestamp: chrono::Utc::now(),
                     })
                     .await;
@@ -1677,6 +1684,7 @@ impl russh_sftp::server::Handler for SftpSession {
                         metadata: Some(json!({
                             "files": [self.server.filesystem.relative_path(&linkpath)],
                         })),
+                        schedule: None,
                         timestamp: chrono::Utc::now(),
                     })
                     .await;

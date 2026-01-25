@@ -161,7 +161,7 @@ mod post {
                                     server.filesystem.clone(),
                                     writer,
                                     &root,
-                                    data.files.into_iter().map(PathBuf::from).collect(),
+                                    data.files,
                                     Some(progress),
                                     ignored.into(),
                                     crate::server::filesystem::archive::create::CreateTarOptions {
@@ -181,7 +181,7 @@ mod post {
                                     server.filesystem.clone(),
                                     writer,
                                     &root,
-                                    data.files.into_iter().map(PathBuf::from).collect(),
+                                    data.files,
                                     Some(progress),
                                     ignored.into(),
                                     crate::server::filesystem::archive::create::CreateZipOptions {
@@ -199,7 +199,7 @@ mod post {
                                     server.filesystem.clone(),
                                     writer,
                                     &root,
-                                    data.files.into_iter().map(PathBuf::from).collect(),
+                                    data.files,
                                     Some(progress),
                                     ignored.into(),
                                     crate::server::filesystem::archive::create::Create7zOptions {

@@ -377,7 +377,7 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
                                 filesystem,
                                 writer,
                                 &path,
-                                names.into_iter().map(PathBuf::from).collect(),
+                                names,
                                 bytes_archived,
                                 is_ignored,
                                 crate::server::filesystem::archive::create::CreateZipOptions {
@@ -386,10 +386,7 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
                             )
                             .await
                         {
-                            tracing::error!(
-                                "failed to create zip archive for btrfs backup: {}",
-                                err
-                            );
+                            tracing::error!("failed to create zip archive for cap vfs: {}", err);
                         }
                     }
                     _ => {
@@ -397,7 +394,7 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
                             filesystem,
                             writer,
                             &path,
-                            names.into_iter().map(PathBuf::from).collect(),
+                            names,
                             bytes_archived,
                             is_ignored,
                             crate::server::filesystem::archive::create::CreateTarOptions {
@@ -408,10 +405,7 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
                         )
                         .await
                         {
-                            tracing::error!(
-                                "failed to create tar archive for btrfs backup: {}",
-                                err
-                            );
+                            tracing::error!("failed to create tar archive for cap vfs: {}", err);
                         }
                     }
                 }

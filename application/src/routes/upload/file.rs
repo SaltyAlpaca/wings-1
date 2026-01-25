@@ -189,6 +189,7 @@ mod post {
                         "files": [filename],
                         "directory": server.filesystem.relative_path(&directory),
                     })),
+                    schedule: None,
                     timestamp: chrono::Utc::now(),
                 })
                 .await;
