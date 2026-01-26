@@ -48,7 +48,7 @@ mod get {
             }
         };
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             status: &*schedule.status.read().await,
         })
         .with_status(StatusCode::ACCEPTED)

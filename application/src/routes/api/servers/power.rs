@@ -28,7 +28,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let aquire_timeout = data.wait_seconds.map(std::time::Duration::from_secs);
 
@@ -112,7 +112,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response { affected })
+        ApiResponse::new_serialized(Response { affected })
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

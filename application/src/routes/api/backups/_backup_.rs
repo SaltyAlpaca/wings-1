@@ -32,7 +32,7 @@ mod delete {
     pub async fn route(
         state: GetState,
         Path(backup_id): Path<uuid::Uuid>,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let backup = match state
             .backup_manager
@@ -58,7 +58,7 @@ mod delete {
             }
         });
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

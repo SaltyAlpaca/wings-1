@@ -58,10 +58,10 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if state.config.ignore_panel_config_updates {
-            return ApiResponse::json(Response { applied: false }).ok();
+            return ApiResponse::new_serialized(Response { applied: false }).ok();
         }
 
         let config = state.config.unsafe_mut();
@@ -115,7 +115,7 @@ mod post {
 
         tokio::task::spawn_blocking(move || state.config.save()).await??;
 
-        ApiResponse::json(Response { applied: true }).ok()
+        ApiResponse::new_serialized(Response { applied: true }).ok()
     }
 }
 

@@ -73,7 +73,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let (root, filesystem) = server
             .filesystem
@@ -331,9 +331,9 @@ mod post {
                     }
                 }
 
-                ApiResponse::json(Response {}).ok()
+                ApiResponse::new_serialized(Response {}).ok()
             } else {
-                ApiResponse::json(ResponseAccepted { identifier })
+                ApiResponse::new_serialized(ResponseAccepted { identifier })
                     .with_status(StatusCode::ACCEPTED)
                     .ok()
             }
@@ -504,9 +504,9 @@ mod post {
                     }
                 }
 
-                ApiResponse::json(Response {}).ok()
+                ApiResponse::new_serialized(Response {}).ok()
             } else {
-                ApiResponse::json(ResponseAccepted { identifier })
+                ApiResponse::new_serialized(ResponseAccepted { identifier })
                     .with_status(StatusCode::ACCEPTED)
                     .ok()
             }

@@ -37,7 +37,7 @@ mod post {
     pub async fn route(
         server: GetServer,
         Path((_server, schedule_id)): Path<(uuid::Uuid, uuid::Uuid)>,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let schedules = server.schedules.get_schedules().await;
 
@@ -52,7 +52,7 @@ mod post {
 
         schedule.trigger(data.skip_condition);
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::OK)
             .ok()
     }

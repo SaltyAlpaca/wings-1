@@ -32,7 +32,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if !matches!(state.container_type, crate::routes::AppContainerType::None) {
             return ApiResponse::error(
@@ -146,7 +146,7 @@ mod post {
             }
         });
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

@@ -45,7 +45,7 @@ mod post {
 
         schedule.recreate_executor(server.0.clone()).await;
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::OK)
             .ok()
     }

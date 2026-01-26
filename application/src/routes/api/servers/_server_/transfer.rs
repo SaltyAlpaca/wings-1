@@ -47,7 +47,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if server.is_system_locked_state() {
             return ApiResponse::error("server is locked")
@@ -79,7 +79,7 @@ mod post {
             server.outgoing_transfer.write().await.replace(transfer);
         }
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }
@@ -126,7 +126,7 @@ mod delete {
             handle.abort();
         }
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

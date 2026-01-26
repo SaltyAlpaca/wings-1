@@ -28,7 +28,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let query_result = match PullQueryResponse::query(&state.config, &data.url).await {
             Ok(query_result) => query_result,
@@ -41,7 +41,7 @@ mod post {
             }
         };
 
-        ApiResponse::json(query_result).ok()
+        ApiResponse::new_serialized(query_result).ok()
     }
 }
 

@@ -43,7 +43,7 @@ mod delete {
 
         server.filesystem.pulls.write().await.remove(&pull_id);
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

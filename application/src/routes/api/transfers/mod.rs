@@ -691,7 +691,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

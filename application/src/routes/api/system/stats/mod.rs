@@ -21,7 +21,7 @@ mod get {
         (status = OK, body = inline(Response)),
     ))]
     pub async fn route(state: GetState) -> ApiResponseResult {
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             stats: &*state.stats_manager.get_stats().await,
         })
         .ok()

@@ -43,7 +43,7 @@ mod delete {
                 .ok();
         }
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

@@ -26,7 +26,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if data.servers.is_empty() {
             for server in state.server_manager.get_servers().await.iter() {
@@ -46,7 +46,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

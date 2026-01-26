@@ -45,7 +45,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let mut updated_count = 0;
         for file in data.files {
@@ -85,7 +85,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             updated: updated_count,
         })
         .ok()

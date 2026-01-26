@@ -28,7 +28,7 @@ mod get {
         (status = OK, body = inline(Response)),
     ))]
     pub async fn route(state: GetState) -> ApiResponseResult {
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             architecture: std::env::consts::ARCH,
             cpu_count: rayon::current_num_threads(),
             kernel_version: sysinfo::System::kernel_long_version(),

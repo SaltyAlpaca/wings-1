@@ -186,7 +186,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let results_count = Arc::new(AtomicUsize::new(0));
         let results = Arc::new(Mutex::new(Vec::new()));
@@ -467,7 +467,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             results: &results.lock().await,
         })
         .ok()

@@ -46,7 +46,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let parent = match Path::new(&data.path).parent() {
             Some(parent) => parent,
@@ -173,11 +173,11 @@ mod post {
             )
             .await?
         {
-            ApiResponse::json(Response { identifier })
+            ApiResponse::new_serialized(Response { identifier })
                 .with_status(StatusCode::ACCEPTED)
                 .ok()
         } else {
-            ApiResponse::json(
+            ApiResponse::new_serialized(
                 destination_filesystem
                     .async_directory_entry(&file_name)
                     .await?,

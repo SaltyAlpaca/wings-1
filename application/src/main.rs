@@ -161,7 +161,12 @@ async fn handle_request(req: Request<Body>, next: Next) -> Result<Response<Body>
         .bright_cyan()
     );
 
-    Ok(next.run(req).await)
+    Ok(wings_rs::response::ACCEPT_HEADER
+        .scope(
+            wings_rs::response::accept_from_headers(req.headers()),
+            async { next.run(req).await },
+        )
+        .await)
 }
 
 async fn handle_cors(

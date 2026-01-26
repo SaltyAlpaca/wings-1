@@ -72,7 +72,7 @@ mod get {
             }
         }
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             version: &state.version,
             container_type: state.container_type,
             cpu: ResponseCpu {

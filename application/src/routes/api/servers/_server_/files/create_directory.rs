@@ -33,7 +33,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let (root, filesystem) = server
             .filesystem
@@ -66,7 +66,7 @@ mod post {
         filesystem.async_create_dir_all(&destination).await?;
         filesystem.async_chown(&destination).await?;
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

@@ -38,7 +38,7 @@ mod get {
             downloads.push(download.read().await.to_api_response());
         }
 
-        ApiResponse::json(Response { downloads }).ok()
+        ApiResponse::new_serialized(Response { downloads }).ok()
     }
 }
 
@@ -89,7 +89,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let (root, filesystem) = server
             .filesystem
@@ -187,9 +187,9 @@ mod post {
                 }
             }
 
-            ApiResponse::json(Response {}).ok()
+            ApiResponse::new_serialized(Response {}).ok()
         } else {
-            ApiResponse::json(ResponsePending { identifier })
+            ApiResponse::new_serialized(ResponsePending { identifier })
                 .with_status(StatusCode::ACCEPTED)
                 .ok()
         }

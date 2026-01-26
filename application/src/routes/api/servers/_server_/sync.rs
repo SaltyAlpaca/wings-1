@@ -8,7 +8,6 @@ mod post {
         routes::{GetState, api::servers::_server_::GetServer},
         server::state::ServerState,
     };
-    use axum::extract::rejection::JsonRejection;
     use serde::{Deserialize, Serialize};
     use utoipa::ToSchema;
 
@@ -33,7 +32,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        data: Result<axum::Json<Payload>, JsonRejection>,
+        data: Result<crate::Payload<Payload>, crate::payload::PayloadRejection>,
     ) -> ApiResponseResult {
         let data = match data {
             Ok(data) => data.0,
@@ -76,7 +75,7 @@ mod post {
             }
         }
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

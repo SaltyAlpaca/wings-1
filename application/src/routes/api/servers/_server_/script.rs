@@ -29,10 +29,10 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<InstallationScript>,
+        crate::Payload(data): crate::Payload<InstallationScript>,
     ) -> ApiResponseResult {
         match crate::server::script::script_server(&server, &state.docker, data).await {
-            Ok((stdout, stderr)) => ApiResponse::json(Response { stdout, stderr }).ok(),
+            Ok((stdout, stderr)) => ApiResponse::new_serialized(Response { stdout, stderr }).ok(),
             Err(err) => {
                 tracing::error!(
                     server = %server.uuid,

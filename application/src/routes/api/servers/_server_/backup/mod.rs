@@ -36,7 +36,7 @@ mod post {
     pub async fn route(
         state: GetState,
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if state.backup_manager.fast_contains(&server, data.uuid).await {
             return ApiResponse::error("backup already exists")
@@ -60,7 +60,7 @@ mod post {
             }
         });
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

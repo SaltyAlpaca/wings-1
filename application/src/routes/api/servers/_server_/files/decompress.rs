@@ -47,7 +47,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let root = match server.filesystem.async_canonicalize(data.root).await {
             Ok(path) => path,
@@ -155,9 +155,9 @@ mod post {
 
             server.filesystem.chown_path(&root).await?;
 
-            ApiResponse::json(Response {}).ok()
+            ApiResponse::new_serialized(Response {}).ok()
         } else {
-            ApiResponse::json(ResponseAccepted { identifier })
+            ApiResponse::new_serialized(ResponseAccepted { identifier })
                 .with_status(StatusCode::ACCEPTED)
                 .ok()
         }

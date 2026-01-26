@@ -146,7 +146,7 @@ mod get {
                     }
                 }
 
-                ApiResponse::json(Response {
+                ApiResponse::new_serialized(Response {
                     hash: compact_str::format_compact!("{:x}", hasher.finalize()),
                 })
                 .ok()

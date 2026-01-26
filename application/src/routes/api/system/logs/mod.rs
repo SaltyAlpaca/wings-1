@@ -58,7 +58,7 @@ mod get {
 
         log_files.sort_by(|l1, l2| l1.last_modified.cmp(&l2.last_modified));
 
-        ApiResponse::json(Response { log_files }).ok()
+        ApiResponse::new_serialized(Response { log_files }).ok()
     }
 }
 

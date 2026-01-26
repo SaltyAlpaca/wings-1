@@ -130,7 +130,7 @@ mod post {
         file.shutdown().await?;
         filesystem.async_chown(&path).await?;
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

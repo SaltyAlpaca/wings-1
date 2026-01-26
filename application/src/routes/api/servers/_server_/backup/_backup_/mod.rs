@@ -56,7 +56,7 @@ mod delete {
             }
         });
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

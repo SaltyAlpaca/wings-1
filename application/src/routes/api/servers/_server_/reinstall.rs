@@ -7,7 +7,7 @@ mod post {
         routes::{ApiError, api::servers::_server_::GetServer},
         server::installation::InstallationScript,
     };
-    use axum::{extract::rejection::JsonRejection, http::StatusCode};
+    use axum::http::StatusCode;
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use utoipa::ToSchema;
@@ -35,7 +35,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        data: Result<axum::Json<Payload>, JsonRejection>,
+        data: Result<crate::Payload<Payload>, crate::payload::PayloadRejection>,
     ) -> ApiResponseResult {
         let data = match data {
             Ok(data) => data.0,
@@ -78,7 +78,7 @@ mod post {
         installer.start(false).await?;
         server.installer.write().await.replace(installer);
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }

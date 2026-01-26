@@ -120,7 +120,7 @@ mod get {
             .async_read_dir(&root, per_page, page, is_ignored)
             .await?;
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             total: entries.total_entries,
             filesystem_writable: filesystem.is_writable(),
             filesystem_fast: filesystem.is_fast(),

@@ -77,7 +77,7 @@ mod get {
         ),
     ))]
     pub async fn route(server: GetServer) -> ApiResponseResult {
-        ApiResponse::json(server.to_api_response().await).ok()
+        ApiResponse::new_serialized(server.to_api_response().await).ok()
     }
 }
 
@@ -104,7 +104,7 @@ mod delete {
     pub async fn route(state: GetState, server: GetServer) -> ApiResponseResult {
         state.server_manager.delete_server(&server).await;
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

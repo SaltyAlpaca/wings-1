@@ -41,7 +41,7 @@ mod put {
     ), request_body = inline(Payload))]
     pub async fn route(
         server: GetServer,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         let (root, filesystem) = server
             .filesystem
@@ -98,7 +98,7 @@ mod put {
             }
         }
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             renamed: renamed_count,
         })
         .ok()

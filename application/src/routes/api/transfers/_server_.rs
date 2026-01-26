@@ -38,7 +38,7 @@ mod delete {
             .store(false, std::sync::atomic::Ordering::SeqCst);
         server.incoming_transfer.write().await.take();
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

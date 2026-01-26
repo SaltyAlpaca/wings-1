@@ -271,7 +271,7 @@ mod get {
 
         let joined_fingerprints = futures::future::join_all(fingerprint_handles).await;
 
-        ApiResponse::json(Response {
+        ApiResponse::new_serialized(Response {
             fingerprints: joined_fingerprints
                 .into_iter()
                 .filter_map(Result::ok)

@@ -20,7 +20,7 @@ mod get {
             servers.push(server.to_api_response().await);
         }
 
-        ApiResponse::json(servers).ok()
+        ApiResponse::new_serialized(servers).ok()
     }
 }
 
@@ -51,7 +51,7 @@ mod post {
     ), request_body = inline(Payload))]
     pub async fn route(
         state: GetState,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if state.server_manager.get_server(data.uuid).await.is_some() {
             return ApiResponse::error("server with this uuid already exists")
@@ -67,7 +67,7 @@ mod post {
             .create_server(&state, server_data, !data.skip_scripts)
             .await;
 
-        ApiResponse::json(Response {}).ok()
+        ApiResponse::new_serialized(Response {}).ok()
     }
 }
 

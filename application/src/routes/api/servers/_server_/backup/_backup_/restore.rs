@@ -40,7 +40,7 @@ mod post {
         state: GetState,
         server: GetServer,
         Path((_server, backup_id)): Path<(uuid::Uuid, uuid::Uuid)>,
-        axum::Json(data): axum::Json<Payload>,
+        crate::Payload(data): crate::Payload<Payload>,
     ) -> ApiResponseResult {
         if data.adapter == BackupAdapter::S3 && data.download_url.is_none() {
             return ApiResponse::error("unable to restore s3 backup without download_url")
@@ -77,7 +77,7 @@ mod post {
             }
         });
 
-        ApiResponse::json(Response {})
+        ApiResponse::new_serialized(Response {})
             .with_status(StatusCode::ACCEPTED)
             .ok()
     }
