@@ -44,7 +44,6 @@ impl ApiResponse {
         }
     }
 
-    #[inline]
     pub fn new_serialized(body: impl serde::Serialize) -> Self {
         let accept_header = ACCEPT_HEADER.try_with(|h| h.clone()).ok().flatten();
 
@@ -95,10 +94,13 @@ impl ApiResponse {
         Self {
             body,
             status: axum::http::StatusCode::OK,
-            headers: axum::http::HeaderMap::from_iter([(
-                axum::http::header::CONTENT_TYPE,
-                content_type,
-            )]),
+            headers: axum::http::HeaderMap::from_iter([
+                (axum::http::header::CONTENT_TYPE, content_type),
+                (
+                    axum::http::header::VARY,
+                    axum::http::HeaderValue::from_static("Accept"),
+                ),
+            ]),
         }
     }
 
