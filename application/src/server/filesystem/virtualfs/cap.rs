@@ -1,3 +1,5 @@
+use tokio::io::AsyncWriteExt;
+
 use super::{
     AsyncFileRead, AsyncReadableFileStream, AsyncWritableSeekableFileStream, ByteRange,
     DirectoryListing, DirectoryStreamWalk, DirectoryWalk, FileMetadata, FileRead, FileType,
@@ -353,10 +355,10 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let names = self.inner.async_read_dir_all(path).await?;
         let file_compression_threads = self.server.app_state.config.api.file_compression_threads;
-        let (reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         tokio::spawn({
             let filesystem = self.inner.clone();
@@ -372,25 +374,32 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
 
                 match archive_format {
                     StreamableArchiveFormat::Zip => {
-                        if let Err(err) =
-                            crate::server::filesystem::archive::create::create_zip_streaming(
-                                filesystem,
-                                writer,
-                                &path,
-                                names,
-                                bytes_archived,
-                                is_ignored,
-                                crate::server::filesystem::archive::create::CreateZipOptions {
-                                    compression_level,
-                                },
-                            )
-                            .await
+                        match crate::server::filesystem::archive::create::create_zip_streaming(
+                            filesystem,
+                            writer,
+                            &path,
+                            names,
+                            bytes_archived,
+                            is_ignored,
+                            crate::server::filesystem::archive::create::CreateZipOptions {
+                                compression_level,
+                            },
+                        )
+                        .await
                         {
-                            tracing::error!("failed to create zip archive for cap vfs: {}", err);
+                            Ok(inner) => {
+                                inner.into_inner().shutdown().await.ok();
+                            }
+                            Err(err) => {
+                                tracing::error!(
+                                    "failed to create zip archive for cap vfs: {}",
+                                    err
+                                );
+                            }
                         }
                     }
                     _ => {
-                        if let Err(err) = crate::server::filesystem::archive::create::create_tar(
+                        match crate::server::filesystem::archive::create::create_tar(
                             filesystem,
                             writer,
                             &path,
@@ -405,7 +414,15 @@ impl super::VirtualReadableFilesystem for VirtualCapFilesystem {
                         )
                         .await
                         {
-                            tracing::error!("failed to create tar archive for cap vfs: {}", err);
+                            Ok(inner) => {
+                                inner.into_inner().shutdown().await.ok();
+                            }
+                            Err(err) => {
+                                tracing::error!(
+                                    "failed to create tar archive for cap vfs: {}",
+                                    err
+                                );
+                            }
                         }
                     }
                 }

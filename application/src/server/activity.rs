@@ -58,7 +58,7 @@ pub enum ActivityEvent {
 
 impl ActivityEvent {
     #[inline]
-    pub fn is_sftp_event(self) -> bool {
+    pub const fn is_sftp_event(self) -> bool {
         matches!(
             self,
             ActivityEvent::SftpWrite

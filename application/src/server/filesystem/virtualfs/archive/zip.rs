@@ -519,7 +519,7 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
 
                     if let Some(name) = (self.is_ignored)(file_type, name.to_path_buf()) {
                         if entry.is_file() {
-                            let (reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+                            let (reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
                             drop(entry);
 
@@ -612,7 +612,7 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
         let mut archive = self.archive.clone();
 
         let size = archive.better_by_path(path.as_ref())?.size();
-        let (duplex_reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (simplex_reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         let path = path.as_ref().to_path_buf();
         tokio::task::spawn_blocking(move || {
@@ -634,13 +634,15 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
                     }
                 }
             }
+
+            runtime.block_on(writer.shutdown()).ok();
         });
 
         Ok(AsyncFileRead {
             size,
             total_size: size,
             reader_range: None,
-            reader: Box::new(duplex_reader),
+            reader: Box::new(simplex_reader),
         })
     }
 
@@ -703,11 +705,11 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let mut archive = self.archive.clone();
         let path = path.as_ref().to_path_buf();
 
-        let (duplex_reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (simplex_reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
@@ -751,8 +753,9 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
                         }
                     }
 
-                    let mut inner = zip.finish()?;
+                    let mut inner = zip.finish()?.into_inner();
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
@@ -840,12 +843,13 @@ impl VirtualReadableFilesystem for VirtualZipArchive {
                     tar.finish()?;
                     let mut inner = tar.into_inner()?.finish()?;
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
             }
         }
 
-        Ok(duplex_reader)
+        Ok(simplex_reader)
     }
 }

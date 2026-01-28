@@ -36,7 +36,7 @@ mod get {
     pub async fn route(server: GetServer, Query(data): Query<Params>) -> ApiResponseResult {
         let mut log_stream = server.read_log(data.lines).await;
 
-        let (logs_reader, mut logs_writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (logs_reader, mut logs_writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         tokio::spawn(async move {
             while let Some(Ok(line)) = log_stream.next().await {

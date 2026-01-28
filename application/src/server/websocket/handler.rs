@@ -99,6 +99,10 @@ pub async fn handle_ws(
                         tracing::warn!(server = %server.uuid, "got massive websocket message from client, {} bytes", data.len());
                         continue;
                     }
+                    if let Message::Binary(data) = &ws_data && data.len() > crate::BUFFER_SIZE {
+                        tracing::warn!(server = %server.uuid, "got massive websocket binary message from client, {} bytes", data.len());
+                        continue;
+                    }
 
                     match super::jwt::handle_jwt(&state, &server, &websocket_handler, ws_data)
                         .await
@@ -165,13 +169,7 @@ pub async fn handle_ws(
                                         let socket_jwt = socket_jwt.read().await;
                                         let socket_jwt = match socket_jwt.as_ref() {
                                             Some(jwt) => jwt,
-                                            None => {
-                                                tracing::debug!(
-                                                    server = %server.uuid,
-                                                    "no socket jwt found, ignoring websocket message",
-                                                );
-                                                continue;
-                                            }
+                                            None => continue,
                                         };
 
                                         match message.event {

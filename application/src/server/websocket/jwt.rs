@@ -28,123 +28,135 @@ pub async fn handle_jwt(
     websocket_handler: &ServerWebsocketHandler,
     message: Message,
 ) -> Result<Option<WebsocketMessage>, JwtError> {
-    match message {
-        Message::Text(text) => {
-            let message: WebsocketMessage = match serde_json::from_str(&text) {
-                Ok(msg) => msg,
-                Err(err) => {
-                    tracing::debug!(
-                        server = %server.uuid,
-                        "failed to deserialize websocket message: {:?}",
-                        err
-                    );
+    let message: WebsocketMessage = match message {
+        Message::Text(text) => match serde_json::from_str(&text) {
+            Ok(msg) => msg,
+            Err(err) => {
+                tracing::debug!(
+                    server = %server.uuid,
+                    "failed to deserialize websocket message: {:?}",
+                    err
+                );
 
-                    return Ok(None);
-                }
-            };
+                return Ok(None);
+            }
+        },
+        Message::Binary(bin) => match rmp_serde::from_slice(&bin) {
+            Ok(msg) => msg,
+            Err(err) => {
+                tracing::debug!(
+                    server = %server.uuid,
+                    "failed to deserialize websocket binary message: {:?}",
+                    err
+                );
 
-            match message.event {
-                WebsocketEvent::Authentication => {
-                    match state.config.jwt.verify::<WebsocketJwtPayload>(
-                        message.args.first().map_or("", |v| v.as_str()),
-                    ) {
-                        Ok(jwt) => {
-                            if !jwt.base.validate(&state.config.jwt).await
-                                || !jwt.permissions.has_permission(Permission::WebsocketConnect)
-                                || jwt.server_uuid != server.uuid
-                            {
-                                tracing::debug!(
-                                    server = %server.uuid,
-                                    "jwt does not have permission to connect to websocket: {:?}",
-                                    jwt.permissions
-                                );
+                return Ok(None);
+            }
+        },
+        _ => return Err(JwtError::Misc(anyhow::anyhow!("invalid message type"))),
+    };
 
-                                if jwt.permissions.has_permission(Permission::WebsocketConnect) {
-                                    websocket_handler
-                                        .send_message(WebsocketMessage::new(
-                                            WebsocketEvent::TokenExpired,
-                                            [].into(),
-                                        ))
-                                        .await;
+    match message.event {
+        WebsocketEvent::Authentication => {
+            match state
+                .config
+                .jwt
+                .verify::<WebsocketJwtPayload>(message.args.first().map_or("", |v| v.as_str()))
+            {
+                Ok(jwt) => {
+                    if !jwt.base.validate(&state.config.jwt).await
+                        || !jwt.permissions.has_permission(Permission::WebsocketConnect)
+                        || jwt.server_uuid != server.uuid
+                    {
+                        tracing::debug!(
+                            server = %server.uuid,
+                            "jwt does not have permission to connect to websocket: {:?}",
+                            jwt.permissions
+                        );
 
-                                    return Err(JwtError::Misc(anyhow::anyhow!("JWT expired")));
-                                }
-
-                                return Err(JwtError::CloseSocket);
-                            }
-
-                            let mut permissions = Vec::new();
-                            for permission in jwt.permissions.iter() {
-                                permissions.push(
-                                    serde_json::to_value(permission)?
-                                        .as_str()
-                                        .unwrap()
-                                        .to_compact_string(),
-                                );
-                            }
-
+                        if jwt.permissions.has_permission(Permission::WebsocketConnect) {
                             websocket_handler
                                 .send_message(WebsocketMessage::new(
-                                    WebsocketEvent::AuthenticationSuccess,
-                                    permissions.into(),
+                                    WebsocketEvent::TokenExpired,
+                                    [].into(),
                                 ))
                                 .await;
 
-                            if websocket_handler
-                                .socket_jwt
-                                .write()
-                                .await
-                                .replace(Arc::new(jwt))
-                                .is_none()
-                            {
-                                websocket_handler
-                                    .send_message(WebsocketMessage::new(
-                                        WebsocketEvent::ServerStatus,
-                                        [server.state.get_state().to_str().into()].into(),
-                                    ))
-                                    .await;
-                            }
-
-                            Ok(None)
+                            return Err(JwtError::Misc(anyhow::anyhow!("JWT expired")));
                         }
-                        Err(err) => {
-                            tracing::debug!(
-                                server = %server.uuid,
-                                "failed to verify jwt when connecting to websocket: {}",
-                                err
-                            );
 
-                            Err(JwtError::CloseSocket)
-                        }
+                        return Err(JwtError::CloseSocket);
                     }
-                }
-                _ => {
-                    if let Some(jwt) = websocket_handler.socket_jwt.read().await.as_ref() {
-                        if !jwt.base.validate(&state.config.jwt).await
-                            || !jwt.permissions.has_permission(Permission::WebsocketConnect)
-                        {
-                            tracing::debug!(
-                                server = %server.uuid,
-                                "jwt does not have permission to connect to websocket: {:?}",
-                                jwt.permissions
-                            );
 
-                            return Err(JwtError::CloseSocket);
-                        }
-
-                        Ok(Some(message))
-                    } else {
-                        tracing::debug!(
-                            server = %server.uuid,
-                            "jwt is not set when connecting to websocket",
+                    let mut permissions = Vec::new();
+                    for permission in jwt.permissions.iter() {
+                        permissions.push(
+                            serde_json::to_value(permission)?
+                                .as_str()
+                                .unwrap()
+                                .to_compact_string(),
                         );
-
-                        Err(JwtError::CloseSocket)
                     }
+
+                    websocket_handler
+                        .send_message(WebsocketMessage::new(
+                            WebsocketEvent::AuthenticationSuccess,
+                            permissions.into(),
+                        ))
+                        .await;
+
+                    if websocket_handler
+                        .socket_jwt
+                        .write()
+                        .await
+                        .replace(Arc::new(jwt))
+                        .is_none()
+                    {
+                        websocket_handler
+                            .send_message(WebsocketMessage::new(
+                                WebsocketEvent::ServerStatus,
+                                [server.state.get_state().to_str().into()].into(),
+                            ))
+                            .await;
+                    }
+
+                    Ok(None)
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        server = %server.uuid,
+                        "failed to verify jwt when connecting to websocket: {}",
+                        err
+                    );
+
+                    Err(JwtError::CloseSocket)
                 }
             }
         }
-        _ => Err(JwtError::Misc(anyhow::anyhow!("invalid message type"))),
+        _ => {
+            if let Some(jwt) = websocket_handler.socket_jwt.read().await.as_ref() {
+                if !jwt.base.validate(&state.config.jwt).await
+                    || !jwt.permissions.has_permission(Permission::WebsocketConnect)
+                {
+                    tracing::debug!(
+                        server = %server.uuid,
+                        "jwt does not have permission to connect to websocket: {:?}",
+                        jwt.permissions
+                    );
+
+                    return Err(JwtError::CloseSocket);
+                }
+
+                Ok(Some(message))
+            } else {
+                tracing::debug!(
+                    server = %server.uuid,
+                    "jwt is not set when connecting to websocket",
+                );
+
+                Err(JwtError::CloseSocket)
+            }
+        }
     }
 }
 

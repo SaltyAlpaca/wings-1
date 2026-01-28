@@ -232,7 +232,7 @@ impl BackupExt for ZfsBackup {
         let names = filesystem.async_read_dir_all(Path::new("")).await?;
         let ignore = Self::get_ignore(config, self.uuid).await?;
 
-        let (reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         tokio::spawn({
             let config = Arc::clone(config);

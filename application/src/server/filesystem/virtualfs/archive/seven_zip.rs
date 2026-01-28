@@ -606,13 +606,13 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
 
                 if let Err(err) = folder.for_each_entries(&mut |entry, entry_reader| {
                     if targets.contains(entry.name()) {
-                        let (duplex_reader, mut duplex_writer) =
-                            tokio::io::duplex(crate::BUFFER_SIZE);
+                        let (simplex_reader, mut simplex_writer) =
+                            tokio::io::simplex(crate::BUFFER_SIZE);
 
                         let send_result = runtime.block_on(tx.send(Ok((
                             FileType::File,
                             PathBuf::from(entry.name()),
-                            Box::new(duplex_reader),
+                            Box::new(simplex_reader),
                         ))));
 
                         if send_result.is_err() {
@@ -625,7 +625,7 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
                                 Ok(0) => break,
                                 Ok(n) => {
                                     if runtime
-                                        .block_on(duplex_writer.write_all(&buffer[..n]))
+                                        .block_on(simplex_writer.write_all(&buffer[..n]))
                                         .is_err()
                                     {
                                         break;
@@ -750,7 +750,7 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
             None => return Err(anyhow::anyhow!("7z archive entry not found")),
         };
 
-        let (duplex_reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (simplex_reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         tokio::task::spawn_blocking(move || {
             let runtime = tokio::runtime::Handle::current();
@@ -790,6 +790,8 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
 
                     Ok(true)
                 });
+
+                runtime.block_on(writer.shutdown()).ok();
             };
         });
 
@@ -797,7 +799,7 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
             size,
             total_size: size,
             reader_range: None,
-            reader: Box::new(duplex_reader),
+            reader: Box::new(simplex_reader),
         })
     }
 
@@ -821,12 +823,12 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let archive = self.archive.clone();
         let mut reader = self.reader.clone();
         let path = path.as_ref().to_path_buf();
 
-        let (duplex_reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (simplex_reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
@@ -915,8 +917,9 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
                         }
                     }
 
-                    let mut inner = zip.finish()?;
+                    let mut inner = zip.finish()?.into_inner();
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
@@ -1010,12 +1013,13 @@ impl VirtualReadableFilesystem for VirtualSevenZipArchive {
                     tar.finish()?;
                     let mut inner = tar.into_inner()?.finish()?;
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
             }
         }
 
-        Ok(duplex_reader)
+        Ok(simplex_reader)
     }
 }

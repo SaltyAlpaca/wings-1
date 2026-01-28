@@ -18,6 +18,42 @@ pub async fn handle_message(
     let user_ip = Some(user_ip);
 
     match message.event {
+        WebsocketEvent::ConfigureSocket => {
+            let Some(property_str) = message.args.first().map(|s| s.as_str()) else {
+                return Ok(());
+            };
+
+            match property_str {
+                "transmission mode" => {
+                    let Some(mode_str) = message.args.get(1).map(|s| s.as_str()) else {
+                        return Ok(());
+                    };
+
+                    match mode_str {
+                        "binary" => {
+                            websocket_handler.set_binary_mode(true);
+                        }
+                        "text" => {
+                            websocket_handler.set_binary_mode(false);
+                        }
+                        _ => {
+                            tracing::debug!(
+                                server = %server.uuid,
+                                "received unknown transmission mode: {}",
+                                mode_str
+                            );
+                        }
+                    }
+                }
+                _ => {
+                    tracing::debug!(
+                        server = %server.uuid,
+                        "received unknown socket configuration property: {}",
+                        property_str
+                    );
+                }
+            }
+        }
         WebsocketEvent::SendStats => {
             websocket_handler
                 .send_message(WebsocketMessage::new(

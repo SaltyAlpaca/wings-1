@@ -120,12 +120,12 @@ impl<'a, R: Read + Seek> Read for CompressionReaderMt<'a, R> {
 
 pub struct AsyncCompressionReader {
     inner_error_receiver: tokio::sync::oneshot::Receiver<std::io::Error>,
-    inner_reader: tokio::io::DuplexStream,
+    inner_reader: tokio::io::ReadHalf<tokio::io::SimplexStream>,
 }
 
 impl AsyncCompressionReader {
     pub fn new(reader: impl Read + Send + 'static, compression_type: CompressionType) -> Self {
-        let (inner_reader, inner_writer) = tokio::io::duplex(crate::BUFFER_SIZE * 4);
+        let (inner_reader, inner_writer) = tokio::io::simplex(crate::BUFFER_SIZE * 2);
         let (inner_error_sender, inner_error_receiver) = tokio::sync::oneshot::channel();
 
         tokio::task::spawn_blocking(move || {
@@ -142,7 +142,12 @@ impl AsyncCompressionReader {
                 Ok(_) => {}
                 Err(err) => {
                     let _ = inner_error_sender.send(err);
+                    return;
                 }
+            }
+
+            if let Err(err) = writer.shutdown() {
+                let _ = inner_error_sender.send(err);
             }
         });
 
@@ -157,7 +162,7 @@ impl AsyncCompressionReader {
         compression_type: CompressionType,
         threads: usize,
     ) -> Self {
-        let (inner_reader, inner_writer) = tokio::io::duplex(crate::BUFFER_SIZE * 4);
+        let (inner_reader, inner_writer) = tokio::io::simplex(crate::BUFFER_SIZE * 4);
         let (inner_error_sender, inner_error_receiver) = tokio::sync::oneshot::channel();
 
         tokio::task::spawn_blocking(move || {

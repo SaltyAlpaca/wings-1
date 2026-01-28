@@ -156,7 +156,7 @@ impl<'a, W: Write + Send + 'static> Write for CompressionWriter<'a, W> {
 
 pub struct AsyncCompressionWriter {
     inner_error_receiver: tokio::sync::oneshot::Receiver<std::io::Error>,
-    inner_writer: tokio::io::DuplexStream,
+    inner_writer: tokio::io::WriteHalf<tokio::io::SimplexStream>,
 }
 
 impl AsyncCompressionWriter {
@@ -166,7 +166,7 @@ impl AsyncCompressionWriter {
         compression_level: CompressionLevel,
         threads: usize,
     ) -> Self {
-        let (inner_reader, inner_writer) = tokio::io::duplex(crate::BUFFER_SIZE * 4);
+        let (inner_reader, inner_writer) = tokio::io::simplex(crate::BUFFER_SIZE * 4);
         let (inner_error_sender, inner_error_receiver) = tokio::sync::oneshot::channel();
 
         tokio::task::spawn_blocking(move || {

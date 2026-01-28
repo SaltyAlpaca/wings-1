@@ -172,7 +172,7 @@ impl BackupCreateExt for S3Backup {
             .open(&file_name)
             .await?;
 
-        let (mut checksum_reader, checksum_writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (mut checksum_reader, checksum_writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         let checksum_task = async {
             let mut sha1 = sha1::Sha1::new();

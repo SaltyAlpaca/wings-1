@@ -46,6 +46,9 @@ pub enum WebsocketEvent {
     TokenExpired,
     #[serde(rename = "auth")]
     Authentication,
+
+    #[serde(rename = "configure socket")]
+    ConfigureSocket,
     #[serde(rename = "set state")]
     SetState,
     #[serde(rename = "send logs")]
@@ -222,6 +225,7 @@ pub struct ServerWebsocketHandler {
     sender: Arc<Mutex<SplitSink<WebSocket, Message>>>,
     socket_jwt: Arc<RwLock<Option<Arc<WebsocketJwtPayload>>>>,
     closed: AtomicBool,
+    binary_mode: AtomicBool,
 }
 
 impl ServerWebsocketHandler {
@@ -233,7 +237,12 @@ impl ServerWebsocketHandler {
             sender,
             socket_jwt,
             closed: AtomicBool::new(false),
+            binary_mode: AtomicBool::new(false),
         }
+    }
+
+    fn set_binary_mode(&self, enabled: bool) {
+        self.binary_mode.store(enabled, Ordering::Relaxed);
     }
 
     async fn get_jwt(&self) -> Result<Arc<WebsocketJwtPayload>, anyhow::Error> {
@@ -245,10 +254,10 @@ impl ServerWebsocketHandler {
     }
 
     async fn close(&self, reason: &str) {
-        if self.closed.load(Ordering::SeqCst) {
+        if self.closed.load(Ordering::Relaxed) {
             return;
         }
-        self.closed.store(true, Ordering::SeqCst);
+        self.closed.store(true, Ordering::Relaxed);
 
         if let Err(err) = self
             .sender
@@ -265,18 +274,29 @@ impl ServerWebsocketHandler {
     }
 
     async fn send_message(&self, message: WebsocketMessage) {
-        if self.closed.load(Ordering::SeqCst) {
+        if self.closed.load(Ordering::Relaxed) {
             return;
         }
 
-        let message = match serde_json::to_string(&message) {
-            Ok(message) => message,
-            Err(err) => {
-                tracing::error!("failed to serialize websocket message: {:?}", err);
-                return;
-            }
+        let message = if self.binary_mode.load(Ordering::Relaxed) {
+            let message = match rmp_serde::to_vec(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Binary(message.into())
+        } else {
+            let message = match serde_json::to_string(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Text(message.into())
         };
-        let message = Message::Text(message.into());
 
         if let Err(err) = self.sender.lock().await.send(message).await {
             tracing::error!("failed to send websocket message: {:?}", err);
@@ -293,14 +313,26 @@ impl ServerWebsocketHandler {
                 .to_compact_string()]
             .into(),
         );
-        let message = match serde_json::to_string(&message) {
-            Ok(message) => message,
-            Err(err) => {
-                tracing::error!("failed to serialize websocket message: {:?}", err);
-                return;
-            }
+
+        let message = if self.binary_mode.load(Ordering::Relaxed) {
+            let message = match rmp_serde::to_vec(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Binary(message.into())
+        } else {
+            let message = match serde_json::to_string(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Text(message.into())
         };
-        let message = Message::Text(message.into());
 
         if let Err(err) = self.sender.lock().await.send(message).await {
             tracing::error!("failed to send websocket message: {:?}", err);
@@ -326,14 +358,25 @@ impl ServerWebsocketHandler {
                 .to_compact_string()]
             .into(),
         );
-        let message = match serde_json::to_string(&message) {
-            Ok(message) => message,
-            Err(err) => {
-                tracing::error!("failed to serialize websocket message: {:?}", err);
-                return;
-            }
+        let message = if self.binary_mode.load(Ordering::Relaxed) {
+            let message = match rmp_serde::to_vec(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Binary(message.into())
+        } else {
+            let message = match serde_json::to_string(&message) {
+                Ok(message) => message,
+                Err(err) => {
+                    tracing::error!("failed to serialize websocket message: {:?}", err);
+                    return;
+                }
+            };
+            Message::Text(message.into())
         };
-        let message = Message::Text(message.into());
 
         if let Err(err) = self.sender.lock().await.send(message).await {
             tracing::error!("failed to send websocket message: {:?}", err);

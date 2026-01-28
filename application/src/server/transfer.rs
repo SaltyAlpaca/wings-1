@@ -212,11 +212,11 @@ impl OutgoingServerTransfer {
                 ))
                 .ok();
 
-            let (files_sender, files_receiver) = async_channel::bounded(1024);
+            let (files_sender, files_receiver) = async_channel::bounded(256);
 
             let (checksum_sender, checksum_receiver) = tokio::sync::oneshot::channel();
-            let (checksummed_writer, mut checksummed_reader) = tokio::io::duplex(crate::BUFFER_SIZE);
-            let (mut writer, reader) = tokio::io::duplex(crate::BUFFER_SIZE);
+            let (mut checksummed_reader, checksummed_writer) = tokio::io::simplex(crate::BUFFER_SIZE);
+            let (reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
             fn get_archive_task(
                 files_receiver: async_channel::Receiver<PathBuf>,
@@ -544,8 +544,8 @@ impl OutgoingServerTransfer {
 
             for i in 0..multiplex_streams {
                 let (checksum_sender, checksum_receiver) = tokio::sync::oneshot::channel();
-                let (checksummed_writer, mut checksummed_reader) = tokio::io::duplex(crate::BUFFER_SIZE);
-                let (mut writer, reader) = tokio::io::duplex(crate::BUFFER_SIZE);
+                let (mut checksummed_reader, checksummed_writer) = tokio::io::simplex(crate::BUFFER_SIZE);
+                let (reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
                 let archive_task = get_archive_task(
                     files_receiver.clone(),

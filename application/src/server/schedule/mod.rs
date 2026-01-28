@@ -198,8 +198,9 @@ impl Schedule {
         &self,
         skip_condition: bool,
         execution_context: ScheduleExecutionContext,
-    ) {
-        self.next_execution_context
+    ) -> Option<ScheduleExecutionContext> {
+        let old_context = self
+            .next_execution_context
             .lock()
             .await
             .replace(execution_context);
@@ -209,6 +210,8 @@ impl Schedule {
         } else {
             self.executor_notifier.notify_one();
         }
+
+        old_context
     }
 
     pub async fn update(&self, raw_schedule: &super::configuration::Schedule) {

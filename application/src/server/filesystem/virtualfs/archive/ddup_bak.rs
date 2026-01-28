@@ -228,7 +228,9 @@ impl VirtualDdupBakArchive {
         entry: &Entry,
         repository: &Option<Arc<ddup_bak::repository::Repository>>,
         zip: &mut zip::ZipWriter<
-            zip::write::StreamWriter<tokio_util::io::SyncIoBridge<tokio::io::DuplexStream>>,
+            zip::write::StreamWriter<
+                tokio_util::io::SyncIoBridge<tokio::io::WriteHalf<tokio::io::SimplexStream>>,
+            >,
         >,
         compression_level: CompressionLevel,
         parent_path: &Path,
@@ -575,7 +577,7 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
         };
 
         let mut entry_reader = self.repository.entry_reader(entry.clone())?;
-        let (reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         tokio::task::spawn_blocking(move || {
             let runtime = tokio::runtime::Handle::current();
@@ -594,6 +596,8 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
                     }
                 }
             }
+
+            runtime.block_on(writer.shutdown()).ok();
         });
 
         Ok(AsyncFileRead {
@@ -632,12 +636,12 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let archive = self.archive.clone();
         let path = path.as_ref().to_path_buf();
         let repository = self.repository.clone();
 
-        let (duplex_reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (simplex_reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
@@ -685,8 +689,9 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
                         }
                     };
 
-                    let mut inner = zip.finish()?;
+                    let mut inner = zip.finish()?.into_inner();
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
@@ -744,13 +749,14 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
                     tar.finish()?;
                     let mut inner = tar.into_inner()?.finish()?;
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
             }
         }
 
-        Ok(duplex_reader)
+        Ok(simplex_reader)
     }
 
     // New required implementation for `walk_dir`
@@ -850,7 +856,7 @@ impl VirtualReadableFilesystem for VirtualDdupBakArchive {
                     let stream: AsyncReadableFileStream = if entry.is_file() {
                         match self.repository.entry_reader(entry) {
                             Ok(mut entry_reader) => {
-                                let (reader, mut writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+                                let (reader, mut writer) = tokio::io::simplex(crate::BUFFER_SIZE);
                                 tokio::task::spawn_blocking(move || {
                                     let runtime = tokio::runtime::Handle::current();
                                     let mut buffer = vec![0; crate::BUFFER_SIZE];

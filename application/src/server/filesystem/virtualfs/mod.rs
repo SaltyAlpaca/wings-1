@@ -483,7 +483,7 @@ pub trait VirtualReadableFilesystem: Send + Sync {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error>;
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error>;
     async fn async_read_dir_files_archive(
         &self,
         path: &(dyn AsRef<Path> + Send + Sync),
@@ -492,7 +492,7 @@ pub trait VirtualReadableFilesystem: Send + Sync {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let root_path = path.as_ref().to_path_buf();
         let is_ignored = move |file_type, path: PathBuf| {
             let stripped_path = path.strip_prefix(&root_path).unwrap_or(&path);

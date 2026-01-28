@@ -127,7 +127,9 @@ impl DdupBakBackup {
         entry: &Entry,
         repository: &ddup_bak::repository::Repository,
         zip: &mut zip::ZipWriter<
-            zip::write::StreamWriter<tokio_util::io::SyncIoBridge<tokio::io::DuplexStream>>,
+            zip::write::StreamWriter<
+                tokio_util::io::SyncIoBridge<tokio::io::WriteHalf<tokio::io::SimplexStream>>,
+            >,
         >,
         compression_level: CompressionLevel,
         parent_path: &Path,
@@ -399,7 +401,7 @@ impl BackupExt for DdupBakBackup {
 
         let archive = self.archive.clone();
         let compression_level = config.system.backups.compression_level;
-        let (reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         match archive_format {
             StreamableArchiveFormat::Zip => {

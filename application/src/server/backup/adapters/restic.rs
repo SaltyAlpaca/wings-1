@@ -577,7 +577,7 @@ impl BackupExt for ResticBackup {
         _range: Option<ByteRange>,
     ) -> Result<crate::response::ApiResponse, anyhow::Error> {
         let compression_level = config.system.backups.compression_level;
-        let (reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         match archive_format {
             StreamableArchiveFormat::Zip => {
@@ -1221,7 +1221,7 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
         compression_level: CompressionLevel,
         bytes_archived: Option<Arc<AtomicU64>>,
         is_ignored: IsIgnoredFn,
-    ) -> Result<tokio::io::DuplexStream, anyhow::Error> {
+    ) -> Result<tokio::io::ReadHalf<tokio::io::SimplexStream>, anyhow::Error> {
         let path = path.as_ref().to_path_buf();
         let entry = self
             .entries
@@ -1237,7 +1237,7 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
 
         let full_path = PathBuf::from(&self.server_path).join(&entry.path);
 
-        let (reader, writer) = tokio::io::duplex(crate::BUFFER_SIZE);
+        let (reader, writer) = tokio::io::simplex(crate::BUFFER_SIZE);
 
         let configuration = self.configuration.clone();
         let short_id = self.short_id.clone();
@@ -1265,10 +1265,10 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
                     let mut child = spawn_restic()?;
 
                     let writer = tokio_util::io::SyncIoBridge::new(writer);
-                    let mut archive = zip::ZipWriter::new_stream(writer);
+                    let mut zip = zip::ZipWriter::new_stream(writer);
 
-                    let mut subtar = tar::Archive::new(child.stdout.take().unwrap());
-                    let mut entries = subtar.entries()?;
+                    let mut restic_tar = tar::Archive::new(child.stdout.take().unwrap());
+                    let mut entries = restic_tar.entries()?;
 
                     let mut read_buffer = vec![0; crate::BUFFER_SIZE];
                     while let Some(Ok(mut entry)) = entries.next() {
@@ -1311,17 +1311,17 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
 
                         match header.entry_type() {
                             tar::EntryType::Directory => {
-                                archive.add_directory(relative.to_string_lossy(), options)?;
+                                zip.add_directory(relative.to_string_lossy(), options)?;
                             }
                             tar::EntryType::Regular => {
-                                archive.start_file(relative.to_string_lossy(), options)?;
+                                zip.start_file(relative.to_string_lossy(), options)?;
 
                                 loop {
                                     let n = entry.read(&mut read_buffer)?;
                                     if n == 0 {
                                         break;
                                     }
-                                    archive.write_all(&read_buffer[..n])?;
+                                    zip.write_all(&read_buffer[..n])?;
                                     if let Some(counter) = &bytes_archived {
                                         counter.fetch_add(n as u64, Ordering::SeqCst);
                                     }
@@ -1331,8 +1331,9 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
                         }
                     }
 
-                    let mut inner = archive.finish()?;
+                    let mut inner = zip.finish()?.into_inner();
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
@@ -1348,10 +1349,10 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
                         file_compression_threads,
                     )?;
 
-                    let mut subtar = tar::Archive::new(child.stdout.take().unwrap());
-                    let mut entries = subtar.entries()?;
+                    let mut restic_tar = tar::Archive::new(child.stdout.take().unwrap());
+                    let mut entries = restic_tar.entries()?;
 
-                    let mut out_tar = tar::Builder::new(writer);
+                    let mut tar = tar::Builder::new(writer);
 
                     while let Some(Ok(entry)) = entries.next() {
                         let mut header = entry.header().clone();
@@ -1373,18 +1374,19 @@ impl VirtualReadableFilesystem for VirtualResticBackup {
                             if let Some(counter) = &bytes_archived {
                                 let counting_reader =
                                     CountingReader::new_with_bytes_read(entry, counter.clone());
-                                out_tar.append_data(&mut header, relative, counting_reader)?;
+                                tar.append_data(&mut header, relative, counting_reader)?;
                             } else {
-                                out_tar.append_data(&mut header, relative, entry)?;
+                                tar.append_data(&mut header, relative, entry)?;
                             }
                         } else {
-                            out_tar.append_data(&mut header, relative, std::io::empty())?;
+                            tar.append_data(&mut header, relative, std::io::empty())?;
                         }
                     }
 
-                    out_tar.finish()?;
-                    let mut inner = out_tar.into_inner()?.finish()?;
+                    tar.finish()?;
+                    let mut inner = tar.into_inner()?.finish()?;
                     inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
