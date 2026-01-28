@@ -222,11 +222,11 @@ impl OutgoingServerTransfer {
                 files_receiver: async_channel::Receiver<PathBuf>,
                 bytes_archived: Arc<AtomicU64>,
                 server: super::Server,
-                writer: impl std::io::Write + Send + 'static,
+                writer: tokio_util::io::SyncIoBridge<tokio::io::WriteHalf<tokio::io::SimplexStream>>,
                 options: crate::server::filesystem::archive::create::CreateTarOptions
             ) -> Pin<Box<impl Future<Output = Result<(), anyhow::Error>>>> {
                 Box::pin(async move {
-                    crate::server::filesystem::archive::create::create_tar_distributed(
+                    let writer = crate::server::filesystem::archive::create::create_tar_distributed(
                         server.filesystem.clone(),
                         writer,
                         Path::new(""),
@@ -235,6 +235,8 @@ impl OutgoingServerTransfer {
                         options,
                     )
                     .await?;
+
+                    writer.into_inner().shutdown().await?;
 
                     Ok(())
                 })
@@ -579,6 +581,7 @@ impl OutgoingServerTransfer {
 
                         checksum_sender.send(format!("{:x}", hasher.finalize())).ok();
                         writer.flush().await?;
+                        writer.shutdown().await?;
 
                         Ok::<_, anyhow::Error>(())
                     }
