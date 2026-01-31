@@ -95,30 +95,29 @@ impl Default for StatsManager {
                         }
                     }
 
-                    let total_memory = sys.total_memory() / 1024 / 1024;
-                    let used_memory = sys.used_memory() / 1024 / 1024;
+                    let total_memory = sys.total_memory();
+                    let used_memory = sys.used_memory();
 
                     let disk = disks
                         .iter()
                         .find(|d| d.mount_point() == Path::new("/"))
                         .unwrap_or(&disks[0]);
-                    let total_disk_space = disk.total_space() / 1024 / 1024;
-                    let used_disk_space =
-                        (disk.total_space() - disk.available_space()) / 1024 / 1024;
-                    let total_disk_read = disk.usage().total_read_bytes / 1024 / 1024;
-                    let disk_read_rate = disk.usage().read_bytes as f64 / 1024.0 / 1024.0;
-                    let total_disk_write = disk.usage().total_written_bytes / 1024 / 1024;
-                    let disk_write_rate = disk.usage().written_bytes as f64 / 1024.0 / 1024.0;
+                    let total_disk_space = disk.total_space();
+                    let used_disk_space = disk.total_space() - disk.available_space();
+                    let total_disk_read = disk.usage().total_read_bytes;
+                    let disk_read_rate = disk.usage().read_bytes as f64;
+                    let total_disk_write = disk.usage().total_written_bytes;
+                    let disk_write_rate = disk.usage().written_bytes as f64;
 
                     let mut total_received = 0;
                     let mut net_in_rate = 0.0;
                     let mut total_transmitted = 0;
                     let mut net_out_rate = 0.0;
                     for (_, network) in networks.into_iter() {
-                        total_received += network.total_received() / 1024 / 1024;
-                        net_in_rate += network.received() as f64 / 1024.0 / 1024.0;
-                        total_transmitted += network.total_transmitted() / 1024 / 1024;
-                        net_out_rate += network.transmitted() as f64 / 1024.0 / 1024.0;
+                        total_received += network.total_received();
+                        net_in_rate += network.received() as f64;
+                        total_transmitted += network.total_transmitted();
+                        net_out_rate += network.transmitted() as f64;
                     }
 
                     let cpu_usage = sys.global_cpu_usage();

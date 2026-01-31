@@ -205,7 +205,7 @@ remote_query:
 ---
 
 - properly support egg `file_denylist`
-- add support for browsing `.zip`, `.7z`, and `.ddup` compressed backups in the file manager
+- add support for browsing `.zip`, `.7z`, and `.ddup` archives in the file manager
 - add support for `name` property on `POST /api/servers/{server}/files/copy`
 - add support for opening individual compressed file (e.g. `.log.gz`) in `GET /api/servers/{server}/files/contents`
 - add (real) folder size support on `GET /api/servers/{server}/files/list-directory`
@@ -213,6 +213,7 @@ remote_query:
 - add zip and 7z support to `POST /api/servers/{server}/files/compress`
 - add support for `ignored_files` in the file upload jwt
 - allow transferring backups in server transfers
+- reworked file operations so progress can be tracked via websocket events and in the background
 
 ### shell
 
