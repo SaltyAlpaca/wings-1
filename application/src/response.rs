@@ -158,8 +158,27 @@ where
         let err = err.into();
         tracing::error!("a request error occurred: {:?}", err);
 
-        ApiResponse::new_serialized(ApiError::new("internal server error"))
-            .with_status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+        let message = if let Some(err) = err.downcast_ref::<&str>() {
+            err.to_string()
+        } else if let Some(err) = err.downcast_ref::<String>() {
+            err.to_string()
+        } else if let Some(err) = err.downcast_ref::<std::io::Error>() {
+            err.to_string()
+        } else if let Some(err) = err.downcast_ref::<zip::result::ZipError>() {
+            match err {
+                zip::result::ZipError::Io(err) => err.to_string(),
+                _ => err.to_string(),
+            }
+        } else if let Some(err) = err.downcast_ref::<sevenz_rust2::Error>() {
+            match err {
+                sevenz_rust2::Error::Io(err, _) => err.to_string(),
+                _ => err.to_string(),
+            }
+        } else {
+            "internal server error".to_string()
+        };
+
+        ApiResponse::error(&message).with_status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 

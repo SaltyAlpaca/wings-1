@@ -203,7 +203,9 @@ impl<'a> DiskLimiterExt for FuseQuotaLimiter<'a> {
 
         let base_fuse_path = self.get_fusequota_path();
         tokio::fs::create_dir_all(&base_fuse_path).await?;
-        self.filesystem.set_base_fs_path(base_fuse_path).await?;
+        self.filesystem
+            .set_base_fs_mount_path(base_fuse_path)
+            .await?;
 
         Ok(())
     }
@@ -223,7 +225,9 @@ impl<'a> DiskLimiterExt for FuseQuotaLimiter<'a> {
 
         let base_fuse_path = self.get_fusequota_path();
         tokio::fs::create_dir_all(&base_fuse_path).await?;
-        self.filesystem.set_base_fs_path(base_fuse_path).await?;
+        self.filesystem
+            .set_base_fs_mount_path(base_fuse_path)
+            .await?;
 
         Ok(())
     }

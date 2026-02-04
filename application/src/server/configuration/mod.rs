@@ -172,7 +172,11 @@ impl ServerConfiguration {
         mounts.push(Mount {
             default: true,
             target: "/home/container".into(),
-            source: filesystem.get_base_fs_path().await.to_string_lossy().into(),
+            source: filesystem
+                .get_base_fs_mount_path()
+                .await
+                .to_string_lossy()
+                .into(),
             read_only: false,
         });
 

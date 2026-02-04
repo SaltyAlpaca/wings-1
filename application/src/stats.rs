@@ -113,7 +113,7 @@ impl Default for StatsManager {
                     let mut net_in_rate = 0.0;
                     let mut total_transmitted = 0;
                     let mut net_out_rate = 0.0;
-                    for (_, network) in networks.into_iter() {
+                    for (_, network) in networks.iter() {
                         total_received += network.total_received();
                         net_in_rate += network.received() as f64;
                         total_transmitted += network.total_transmitted();

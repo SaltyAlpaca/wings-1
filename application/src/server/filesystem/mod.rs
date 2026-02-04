@@ -371,11 +371,11 @@ impl Filesystem {
         }
     }
 
-    /// Sets the base fs path, this is the path used by the cap filesystem
+    /// Sets the base fs path, this is the path used by the container filesystem
     /// It may differ from the base_path for some disk limiters.
     ///
     /// DO NOT CALL THIS FUNCTION UNLESS YOU KNOW WHAT YOU ARE DOING
-    pub async fn set_base_fs_path(&self, path: PathBuf) -> Result<(), std::io::Error> {
+    pub async fn set_base_fs_mount_path(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let mut base_fs_path = self.base_fs_mount_path.write().await;
         if *base_fs_path == path {
             return Ok(());
@@ -385,9 +385,9 @@ impl Filesystem {
         Ok(())
     }
 
-    /// Returns the base fs path, this is the path used by the cap filesystem
+    /// Returns the base fs path, this is the path used by the container filesystem
     /// It may differ from the base_path for some disk limiters
-    pub async fn get_base_fs_path(&self) -> PathBuf {
+    pub async fn get_base_fs_mount_path(&self) -> PathBuf {
         self.base_fs_mount_path.read().await.clone()
     }
 
@@ -1141,25 +1141,14 @@ impl Filesystem {
                 let cap_filesystem = self.cap_filesystem.clone();
                 let path = self.relative_path(path.as_ref());
                 let base_path = self.base_path.clone();
-                let base_fs_path = self.get_base_fs_path().await;
 
                 move || {
                     if crate::unlikely(path == Path::new("") || path == Path::new("/")) {
-                        std::os::unix::fs::chown(
+                        Ok::<_, anyhow::Error>(std::os::unix::fs::chown(
                             &base_path,
                             Some(owner_uid.as_raw()),
                             Some(owner_gid.as_raw()),
-                        )?;
-
-                        if base_path != base_fs_path {
-                            std::os::unix::fs::chown(
-                                base_fs_path,
-                                Some(owner_uid.as_raw()),
-                                Some(owner_gid.as_raw()),
-                            )?;
-                        }
-
-                        Ok::<_, anyhow::Error>(())
+                        )?)
                     } else {
                         Ok(rustix::fs::chownat(
                             cap_filesystem.get_inner()?.as_fd(),
