@@ -1393,6 +1393,7 @@ impl Config {
                         "a docker network with the same name already exists, but it overlaps with another network. automatically incrementing interface, pool subnet and gateway by 1 and trying again..."
                     );
 
+                    let mut attempts = 0;
                     loop {
                         fn increment_ip_or_cidr(ip: &str) -> String {
                             let network_mask = if let Some(slash) = ip.find('/') {
@@ -1447,6 +1448,14 @@ impl Config {
                             tracing::info!("created docker network {}", self.docker.network.name);
                             break;
                         }
+
+                        if attempts >= 80 {
+                            return Err(anyhow::anyhow!(
+                                "failed to create docker network after 80 attempts, aborting"
+                            ));
+                        }
+
+                        attempts += 1;
                     }
                 }
                 Err(err) => return Err(err.into()),
