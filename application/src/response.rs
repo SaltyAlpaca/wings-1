@@ -140,7 +140,6 @@ impl<T> From<T> for ApiResponse
 where
     T: Into<anyhow::Error>,
 {
-    #[inline]
     fn from(err: T) -> Self {
         let err = err.into();
         tracing::error!("a request error occurred: {:?}", err);

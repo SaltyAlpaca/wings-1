@@ -1323,49 +1323,134 @@ impl Config {
             .await;
 
         if network.is_err() {
-            client
-                .create_network(bollard::network::CreateNetworkOptions {
-                    name: self.docker.network.name.as_str(),
-                    driver: self.docker.network.driver.as_str(),
-                    enable_ipv6: true,
-                    internal: self.docker.network.is_internal,
-                    ipam: bollard::models::Ipam {
-                        config: Some(vec![
-                            bollard::models::IpamConfig {
-                                subnet: Some(self.docker.network.interfaces.v4.subnet.clone()),
-                                gateway: Some(self.docker.network.interfaces.v4.gateway.clone()),
-                                ..Default::default()
-                            },
-                            bollard::models::IpamConfig {
-                                subnet: Some(self.docker.network.interfaces.v6.subnet.clone()),
-                                gateway: Some(self.docker.network.interfaces.v6.gateway.clone()),
-                                ..Default::default()
-                            },
+            async fn create_network(
+                client: &bollard::Docker,
+                config: &Config,
+            ) -> Result<(), bollard::errors::Error> {
+                client
+                    .create_network(bollard::network::CreateNetworkOptions {
+                        name: config.docker.network.name.as_str(),
+                        driver: config.docker.network.driver.as_str(),
+                        enable_ipv6: true,
+                        internal: config.docker.network.is_internal,
+                        ipam: bollard::models::Ipam {
+                            config: Some(vec![
+                                bollard::models::IpamConfig {
+                                    subnet: Some(
+                                        config.docker.network.interfaces.v4.subnet.clone(),
+                                    ),
+                                    gateway: Some(
+                                        config.docker.network.interfaces.v4.gateway.clone(),
+                                    ),
+                                    ..Default::default()
+                                },
+                                bollard::models::IpamConfig {
+                                    subnet: Some(
+                                        config.docker.network.interfaces.v6.subnet.clone(),
+                                    ),
+                                    gateway: Some(
+                                        config.docker.network.interfaces.v6.gateway.clone(),
+                                    ),
+                                    ..Default::default()
+                                },
+                            ]),
+                            ..Default::default()
+                        },
+                        options: HashMap::from([
+                            ("encryption", "false"),
+                            ("com.docker.network.bridge.default_bridge", "false"),
+                            (
+                                "com.docker.network.bridge.enable_icc",
+                                &config.docker.network.enable_icc.to_string(),
+                            ),
+                            ("com.docker.network.bridge.enable_ip_masquerade", "true"),
+                            ("com.docker.network.bridge.host_binding_ipv4", "0.0.0.0"),
+                            (
+                                "com.docker.network.bridge.name",
+                                &config.docker.network.name,
+                            ),
+                            (
+                                "com.docker.network.driver.mtu",
+                                &config.docker.network.network_mtu.to_string(),
+                            ),
                         ]),
                         ..Default::default()
-                    },
-                    options: HashMap::from([
-                        ("encryption", "false"),
-                        ("com.docker.network.bridge.default_bridge", "false"),
-                        (
-                            "com.docker.network.bridge.enable_icc",
-                            &self.docker.network.enable_icc.to_string(),
-                        ),
-                        ("com.docker.network.bridge.enable_ip_masquerade", "true"),
-                        ("com.docker.network.bridge.host_binding_ipv4", "0.0.0.0"),
-                        ("com.docker.network.bridge.name", &self.docker.network.name),
-                        (
-                            "com.docker.network.driver.mtu",
-                            &self.docker.network.network_mtu.to_string(),
-                        ),
-                    ]),
-                    ..Default::default()
-                })
-                .await
-                .context(format!(
-                    "failed to create network {}",
-                    self.docker.network.name
-                ))?;
+                    })
+                    .await?;
+
+                Ok(())
+            }
+
+            match create_network(client, self).await {
+                Ok(_) => {
+                    tracing::info!("created docker network {}", self.docker.network.name);
+                }
+                Err(bollard::errors::Error::DockerResponseServerError {
+                    status_code,
+                    message,
+                }) if status_code == 403 && message.contains("Pool overlaps") => {
+                    tracing::warn!(
+                        "a docker network with the same name already exists, but it overlaps with another network. automatically incrementing interface, pool subnet and gateway by 1 and trying again..."
+                    );
+
+                    loop {
+                        fn increment_ip_or_cidr(ip: &str) -> String {
+                            let network_mask = if let Some(slash) = ip.find('/') {
+                                &ip[slash..]
+                            } else {
+                                ""
+                            };
+                            let ip = ip.trim_end_matches(network_mask);
+
+                            if let Ok(ip) = ip.parse::<std::net::Ipv4Addr>() {
+                                let octets = ip.octets();
+                                let incremented = std::net::Ipv4Addr::new(
+                                    octets[0],
+                                    octets[1].wrapping_add(1),
+                                    octets[2],
+                                    octets[3],
+                                );
+                                format!("{}{}", incremented, network_mask)
+                            } else if let Ok(ip) = ip.parse::<std::net::Ipv6Addr>() {
+                                let segments = ip.segments();
+                                let incremented = std::net::Ipv6Addr::new(
+                                    segments[0],
+                                    segments[1],
+                                    segments[2].wrapping_add(1),
+                                    segments[3],
+                                    segments[4],
+                                    segments[5],
+                                    segments[6],
+                                    segments[7],
+                                );
+                                format!("{}{}", incremented, network_mask)
+                            } else {
+                                ip.into()
+                            }
+                        }
+
+                        self.unsafe_mut().docker.network.interface =
+                            increment_ip_or_cidr(&self.docker.network.interface);
+                        self.unsafe_mut().docker.network.interfaces.v4.subnet =
+                            increment_ip_or_cidr(&self.docker.network.interfaces.v4.subnet);
+                        self.unsafe_mut().docker.network.interfaces.v4.gateway =
+                            increment_ip_or_cidr(&self.docker.network.interfaces.v4.gateway);
+                        self.unsafe_mut().docker.network.interfaces.v6.subnet =
+                            increment_ip_or_cidr(&self.docker.network.interfaces.v6.subnet);
+                        self.unsafe_mut().docker.network.interfaces.v6.gateway =
+                            increment_ip_or_cidr(&self.docker.network.interfaces.v6.gateway);
+
+                        if let Err(err) = create_network(client, self).await {
+                            tracing::warn!("failed to create docker network, trying again...");
+                            tracing::error!("failed to create docker network: {:?}", err);
+                        } else {
+                            tracing::info!("created docker network {}", self.docker.network.name);
+                            break;
+                        }
+                    }
+                }
+                Err(err) => return Err(err.into()),
+            }
 
             let driver = &self.docker.network.driver;
             if !matches!(driver.as_str(), "host" | "overlay" | "weavemesh") {
