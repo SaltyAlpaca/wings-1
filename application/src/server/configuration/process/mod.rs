@@ -9,6 +9,7 @@ mod ini;
 mod json;
 mod plain;
 mod properties;
+mod toml;
 mod xml;
 mod yaml;
 
@@ -27,6 +28,7 @@ pub enum ServerConfigurationFileParser {
     Ini,
     Json,
     Xml,
+    Toml,
 }
 
 #[derive(ToSchema, Deserialize, Clone, Debug)]
@@ -385,6 +387,9 @@ impl ProcessConfiguration {
                 }
                 ServerConfigurationFileParser::File => {
                     plain::PlainFileParser::process_file(&file_content, config, server).await?
+                }
+                ServerConfigurationFileParser::Toml => {
+                    toml::TomlFileParser::process_file(&file_content, config, server).await?
                 }
             };
 
