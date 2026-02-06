@@ -193,16 +193,6 @@ impl ServerConfiguration {
         }
 
         #[cfg(unix)]
-        if self.container.kvm_passthrough_enabled {
-            mounts.push(Mount {
-                default: false,
-                target: "/dev/kvm".into(),
-                source: "/dev/kvm".into(),
-                read_only: false,
-            });
-        }
-
-        #[cfg(unix)]
         if config.system.passwd.enabled {
             mounts.push(Mount {
                 default: false,
@@ -255,6 +245,21 @@ impl ServerConfiguration {
                 ..Default::default()
             })
             .collect()
+    }
+
+    fn convert_devices(&self) -> Vec<bollard::models::DeviceMapping> {
+        let mut devices = Vec::new();
+
+        #[cfg(unix)]
+        if self.container.kvm_passthrough_enabled {
+            devices.push(bollard::models::DeviceMapping {
+                path_on_host: Some("/dev/kvm".into()),
+                path_in_container: Some("/dev/kvm".into()),
+                cgroup_permissions: Some("rwm".into()),
+            });
+        }
+
+        devices
     }
 
     fn convert_allocations_bindings(&self) -> bollard::models::PortMap {
@@ -522,6 +527,7 @@ impl ServerConfiguration {
 
                 port_bindings: Some(self.convert_allocations_docker_bindings(config)),
                 mounts: Some(self.convert_mounts(config, filesystem).await),
+                devices: Some(self.convert_devices()),
                 network_mode: Some(network_mode),
                 dns: Some(config.docker.network.dns.clone()),
                 tmpfs: Some(HashMap::from([(
