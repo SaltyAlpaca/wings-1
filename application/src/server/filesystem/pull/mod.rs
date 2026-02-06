@@ -156,7 +156,9 @@ impl Download {
         }
 
         'header_check: {
-            if use_header {
+            if let Some(file_name) = file_name {
+                real_destination.push(file_name);
+            } else if use_header {
                 if let Some(header) = response.headers().get("Content-Disposition")
                     && let Ok(header) = header.to_str()
                     && let Some(filename) = crate::utils::parse_content_disposition_filename(header)
@@ -181,8 +183,6 @@ impl Download {
                             format!("download_{random_string}")
                         }),
                 );
-            } else if let Some(file_name) = file_name {
-                real_destination.push(file_name);
             } else {
                 real_destination.push(
                     response
