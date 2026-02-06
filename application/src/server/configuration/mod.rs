@@ -107,6 +107,8 @@ nestify::nest! {
 
             #[serde(default)]
             pub hugepages_passthrough_enabled: bool,
+            #[serde(default)]
+            pub kvm_passthrough_enabled: bool,
 
             #[serde(default)]
             #[schema(inline)]
@@ -186,6 +188,16 @@ impl ServerConfiguration {
                 default: false,
                 target: "/dev/hugepages".into(),
                 source: "/dev/hugepages".into(),
+                read_only: false,
+            });
+        }
+
+        #[cfg(unix)]
+        if self.container.kvm_passthrough_enabled {
+            mounts.push(Mount {
+                default: false,
+                target: "/dev/kvm".into(),
+                source: "/dev/kvm".into(),
                 read_only: false,
             });
         }
