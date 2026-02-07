@@ -47,25 +47,27 @@ mod create {
         email: &str,
         challenge_dir: &str,
     ) -> Result<(String, String), String> {
-        // Create a new ACME account
-        let account = Account::create(
-            &NewAccount {
-                contact: &[&format!("mailto:{}", email)],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            LetsEncrypt::Production.url(),
-            None,
-        )
-        .await
-        .map_err(|e| format!("Failed to create ACME account: {}", e))?;
+        // Create a new ACME account using the builder pattern
+        let (account, _credentials) = Account::builder()
+            .map_err(|e| format!("Failed to create account builder: {}", e))?
+            .create(
+                &NewAccount {
+                    contact: &[&format!("mailto:{}", email)],
+                    terms_of_service_agreed: true,
+                    only_return_existing: false,
+                },
+                LetsEncrypt::Production.url().to_string(),
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to create ACME account: {}", e))?;
 
+        // Create identifiers for the order
+        let identifiers = vec![Identifier::Dns(domain.to_string())];
+        
         // Create a new order for the certificate
-        let identifier = Identifier::Dns(domain.to_string());
         let mut order = account
-            .new_order(&NewOrder {
-                identifiers: &[identifier],
-            })
+            .new_order(&NewOrder::new(&identifiers))
             .await
             .map_err(|e| format!("Failed to create order: {}", e))?;
 
@@ -95,7 +97,7 @@ mod create {
 
             // Write challenge response to well-known path
             let challenge_path = format!("{}/.well-known/acme-challenge/{}", challenge_dir, token);
-            
+
             // Ensure directory exists
             if let Some(parent) = Path::new(&challenge_path).parent() {
                 fs::create_dir_all(parent)
@@ -135,14 +137,14 @@ mod create {
 
         // Wait for order to be ready
         let mut attempts = 0;
-        let state = loop {
-            let state = order
-                .refresh()
-                .await
-                .map_err(|e| format!("Failed to refresh order: {}", e))?;
+        loop {
+            let state = order.state();
 
             if let OrderStatus::Ready | OrderStatus::Invalid | OrderStatus::Valid = state.status {
-                break state;
+                if state.status == OrderStatus::Invalid {
+                    return Err("Order was rejected".to_string());
+                }
+                break;
             }
 
             attempts += 1;
@@ -150,15 +152,14 @@ mod create {
                 return Err("Order did not become ready in time".to_string());
             }
             sleep(Duration::from_secs(2)).await;
-        };
-
-        if state.status == OrderStatus::Invalid {
-            return Err("Order was rejected".to_string());
+            
+            // Refresh the order state
+            order.refresh().await.map_err(|e| format!("Failed to refresh order: {}", e))?;
         }
 
         // Generate a private key and CSR
-        let key_pair = KeyPair::generate()
-            .map_err(|e| format!("Failed to generate key pair: {}", e))?;
+        let key_pair =
+            KeyPair::generate().map_err(|e| format!("Failed to generate key pair: {}", e))?;
 
         let mut params = CertificateParams::new(vec![domain.to_string()])
             .map_err(|e| format!("Failed to create cert params: {}", e))?;
@@ -176,10 +177,7 @@ mod create {
 
         // Wait for certificate
         let cert_chain = loop {
-            let state = order
-                .refresh()
-                .await
-                .map_err(|e| format!("Failed to refresh order: {}", e))?;
+            let state = order.state();
 
             if let OrderStatus::Valid = state.status {
                 break order
@@ -194,6 +192,7 @@ mod create {
             }
 
             sleep(Duration::from_secs(2)).await;
+            order.refresh().await.map_err(|e| format!("Failed to refresh order: {}", e))?;
         };
 
         Ok((cert_chain, key_pair.serialize_pem()))
