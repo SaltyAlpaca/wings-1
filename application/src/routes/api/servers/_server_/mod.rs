@@ -15,6 +15,7 @@ mod files;
 mod install;
 mod logs;
 mod power;
+mod proxy;
 mod reinstall;
 mod schedules;
 mod script;
@@ -116,6 +117,7 @@ pub fn router(state: &State) -> OpenApiRouter<State> {
         .nest("/script", script::router(state))
         .nest("/power", power::router(state))
         .nest("/version", version::router(state))
+        .nest("/proxy", proxy::router(state))
         .nest("/commands", commands::router(state))
         .nest("/sync", sync::router(state))
         .nest("/reinstall", reinstall::router(state))
