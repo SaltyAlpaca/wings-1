@@ -10,15 +10,13 @@ mod create {
     use axum::Json;
     use instant_acme::{
         Account, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt, NewAccount,
-        NewOrder, OrderStatus,
+        NewOrder, RetryPolicy,
     };
-    use rcgen::{CertificateParams, DistinguishedName, KeyPair};
     use serde::{Deserialize, Serialize};
     use std::path::Path;
     use std::time::Duration;
     use tokio::fs;
     use tokio::process::Command;
-    use tokio::time::sleep;
     use utoipa::ToSchema;
 
     #[derive(ToSchema, Deserialize)]
@@ -64,39 +62,39 @@ mod create {
 
         // Create identifiers for the order
         let identifiers = vec![Identifier::Dns(domain.to_string())];
-        
+
         // Create a new order for the certificate
         let mut order = account
             .new_order(&NewOrder::new(&identifiers))
             .await
             .map_err(|e| format!("Failed to create order: {}", e))?;
 
-        // Get authorizations
-        let authorizations = order
-            .authorizations()
-            .await
-            .map_err(|e| format!("Failed to get authorizations: {}", e))?;
+        // Process each authorization using the async iterator
+        let mut authorizations = order.authorizations();
+        while let Some(authz_result) = authorizations.next().await {
+            let mut authz = authz_result
+                .map_err(|e| format!("Failed to get authorization: {}", e))?;
 
-        for authz in authorizations {
             match authz.status {
                 AuthorizationStatus::Pending => {}
                 AuthorizationStatus::Valid => continue,
                 _ => return Err("Authorization in unexpected state".to_string()),
             }
 
-            // Find HTTP-01 challenge
-            let challenge = authz
-                .challenges
-                .iter()
-                .find(|c| c.r#type == ChallengeType::Http01)
+            // Get HTTP-01 challenge
+            let mut challenge = authz
+                .challenge(ChallengeType::Http01)
                 .ok_or("No HTTP-01 challenge found")?;
 
-            // Create the challenge file
-            let token = &challenge.token;
-            let key_authorization = order.key_authorization(challenge);
+            // Get challenge token and key authorization
+            let token = challenge.token.clone();
+            let key_authorization = challenge.key_authorization();
 
             // Write challenge response to well-known path
-            let challenge_path = format!("{}/.well-known/acme-challenge/{}", challenge_dir, token);
+            let challenge_path = format!(
+                "{}/.well-known/acme-challenge/{}",
+                challenge_dir, token
+            );
 
             // Ensure directory exists
             if let Some(parent) = Path::new(&challenge_path).parent() {
@@ -109,93 +107,42 @@ mod create {
                 .await
                 .map_err(|e| format!("Failed to write challenge file: {}", e))?;
 
-            // Set challenge as ready
-            order
-                .set_challenge_ready(&challenge.url)
+            // Notify ACME server that challenge is ready
+            challenge
+                .set_ready()
                 .await
                 .map_err(|e| format!("Failed to set challenge ready: {}", e))?;
 
-            // Poll for authorization to become valid
-            for _ in 0..20 {
-                sleep(Duration::from_secs(2)).await;
-                let updated_authz = order
-                    .authorizations()
-                    .await
-                    .map_err(|e| format!("Failed to refresh authorization: {}", e))?;
-
-                if updated_authz
-                    .iter()
-                    .all(|a| matches!(a.status, AuthorizationStatus::Valid))
-                {
-                    break;
-                }
-            }
-
-            // Clean up challenge file
-            let _ = fs::remove_file(&challenge_path).await;
+            // Clean up challenge file after a short delay
+            let cleanup_path = challenge_path.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                let _ = fs::remove_file(&cleanup_path).await;
+            });
         }
+        // Drop authorizations to release the mutable borrow on order
+        drop(authorizations);
 
-        // Wait for order to be ready
-        let mut attempts = 0;
-        loop {
-            let state = order.state();
-
-            if let OrderStatus::Ready | OrderStatus::Invalid | OrderStatus::Valid = state.status {
-                if state.status == OrderStatus::Invalid {
-                    return Err("Order was rejected".to_string());
-                }
-                break;
-            }
-
-            attempts += 1;
-            if attempts > 20 {
-                return Err("Order did not become ready in time".to_string());
-            }
-            sleep(Duration::from_secs(2)).await;
-            
-            // Refresh the order state
-            order.refresh().await.map_err(|e| format!("Failed to refresh order: {}", e))?;
-        }
-
-        // Generate a private key and CSR
-        let key_pair =
-            KeyPair::generate().map_err(|e| format!("Failed to generate key pair: {}", e))?;
-
-        let mut params = CertificateParams::new(vec![domain.to_string()])
-            .map_err(|e| format!("Failed to create cert params: {}", e))?;
-        params.distinguished_name = DistinguishedName::new();
-
-        let csr = params
-            .serialize_request(&key_pair)
-            .map_err(|e| format!("Failed to create CSR: {}", e))?;
-
-        // Finalize the order with CSR
+        // Wait for order to become ready
+        let retry_policy = RetryPolicy::default();
         order
-            .finalize(csr.der())
+            .poll_ready(&retry_policy)
+            .await
+            .map_err(|e| format!("Order did not become ready: {}", e))?;
+
+        // Generate CSR and finalize order - finalize() returns the private key PEM
+        let private_key_pem = order
+            .finalize()
             .await
             .map_err(|e| format!("Failed to finalize order: {}", e))?;
 
-        // Wait for certificate
-        let cert_chain = loop {
-            let state = order.state();
+        // Wait for certificate to be issued
+        let cert_chain = order
+            .poll_certificate(&retry_policy)
+            .await
+            .map_err(|e| format!("Failed to get certificate: {}", e))?;
 
-            if let OrderStatus::Valid = state.status {
-                break order
-                    .certificate()
-                    .await
-                    .map_err(|e| format!("Failed to get certificate: {}", e))?
-                    .ok_or("No certificate returned")?;
-            }
-
-            if let OrderStatus::Invalid = state.status {
-                return Err("Order became invalid".to_string());
-            }
-
-            sleep(Duration::from_secs(2)).await;
-            order.refresh().await.map_err(|e| format!("Failed to refresh order: {}", e))?;
-        };
-
-        Ok((cert_chain, key_pair.serialize_pem()))
+        Ok((cert_chain, private_key_pem))
     }
 
     #[utoipa::path(post, path = "/create", responses(
