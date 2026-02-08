@@ -1,12 +1,10 @@
 use super::State;
-use crate::config::ProxyWebServer;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod create {
     use crate::{
-        config::ProxyWebServer,
         response::{ApiResponse, ApiResponseResult},
-        routes::{ApiError, GetState, api::servers::_server_::GetServer},
+        routes::{ApiError, api::servers::_server_::GetServer},
     };
     use axum::http::StatusCode;
     use axum::Json;
@@ -20,11 +18,21 @@ mod create {
     use tokio::fs;
     use utoipa::ToSchema;
 
+    #[derive(ToSchema, Deserialize, Default, Clone, Copy, PartialEq)]
+    #[serde(rename_all = "lowercase")]
+    pub enum WebServer {
+        #[default]
+        Nginx,
+        Apache,
+    }
+
     #[derive(ToSchema, Deserialize)]
     pub struct CreateProxyRequest {
         domain: String,
         ip: String,
         port: String,
+        #[serde(default)]
+        webserver: WebServer,
         #[serde(default)]
         ssl: bool,
         #[serde(default)]
@@ -139,10 +147,10 @@ server {{
         }
     }
 
-    fn get_config_path(webserver: ProxyWebServer, domain: &str, port: &str) -> String {
+    fn get_config_path(webserver: WebServer, domain: &str, port: &str) -> String {
         match webserver {
-            ProxyWebServer::Nginx => format!("/etc/nginx/sites-available/{}_{}.conf", domain, port),
-            ProxyWebServer::Apache => format!("/etc/apache2/sites-available/{}_{}.conf", domain, port),
+            WebServer::Nginx => format!("/etc/nginx/sites-available/{}_{}.conf", domain, port),
+            WebServer::Apache => format!("/etc/apache2/sites-available/{}_{}.conf", domain, port),
         }
     }
 
@@ -248,12 +256,10 @@ server {{
         ),
     ))]
     pub async fn route(
-        state: GetState,
         _server: GetServer,
         Json(data): Json<CreateProxyRequest>,
     ) -> ApiResponseResult {
-        // Read webserver type from config
-        let webserver = state.config.proxy.webserver;
+        let webserver = data.webserver;
         let config_path = get_config_path(webserver, &data.domain, &data.port);
 
         // Check if config already exists to prevent accidental overwrites
@@ -343,7 +349,7 @@ server {{
         };
 
         let config = match webserver {
-            ProxyWebServer::Nginx => generate_nginx_config(
+            WebServer::Nginx => generate_nginx_config(
                 &data.domain,
                 &data.ip,
                 &data.port,
@@ -351,7 +357,7 @@ server {{
                 cert_path.as_deref(),
                 key_path.as_deref(),
             ),
-            ProxyWebServer::Apache => generate_apache_config(
+            WebServer::Apache => generate_apache_config(
                 &data.domain,
                 &data.ip,
                 &data.port,
@@ -369,8 +375,8 @@ server {{
         }
 
         let webserver_name = match webserver {
-            ProxyWebServer::Nginx => "nginx",
-            ProxyWebServer::Apache => "apache2",
+            WebServer::Nginx => "nginx",
+            WebServer::Apache => "apache2",
         };
 
         ApiResponse::new_serialized(Response {
@@ -387,9 +393,8 @@ server {{
 
 mod delete {
     use crate::{
-        config::ProxyWebServer,
         response::{ApiResponse, ApiResponseResult},
-        routes::{ApiError, GetState, api::servers::_server_::GetServer},
+        routes::{ApiError, api::servers::_server_::GetServer},
     };
     use axum::http::StatusCode;
     use axum::Json;
@@ -397,10 +402,14 @@ mod delete {
     use tokio::fs;
     use utoipa::ToSchema;
 
+    use super::create::WebServer;
+
     #[derive(ToSchema, Deserialize)]
     pub struct DeleteProxyRequest {
         domain: String,
         port: String,
+        #[serde(default)]
+        webserver: WebServer,
     }
 
     #[derive(ToSchema, Serialize)]
@@ -419,18 +428,17 @@ mod delete {
         ),
     ))]
     pub async fn route(
-        state: GetState,
         _server: GetServer,
         Json(data): Json<DeleteProxyRequest>,
     ) -> ApiResponseResult {
-        let webserver = state.config.proxy.webserver;
+        let webserver = data.webserver;
 
         let (sites_available, sites_enabled) = match webserver {
-            ProxyWebServer::Nginx => (
+            WebServer::Nginx => (
                 format!("/etc/nginx/sites-available/{}_{}.conf", data.domain, data.port),
                 format!("/etc/nginx/sites-enabled/{}_{}.conf", data.domain, data.port),
             ),
-            ProxyWebServer::Apache => (
+            WebServer::Apache => (
                 format!("/etc/apache2/sites-available/{}_{}.conf", data.domain, data.port),
                 format!("/etc/apache2/sites-enabled/{}_{}.conf", data.domain, data.port),
             ),
@@ -445,8 +453,8 @@ mod delete {
         }
 
         let webserver_name = match webserver {
-            ProxyWebServer::Nginx => "nginx",
-            ProxyWebServer::Apache => "apache2",
+            WebServer::Nginx => "nginx",
+            WebServer::Apache => "apache2",
         };
 
         ApiResponse::new_serialized(Response {
