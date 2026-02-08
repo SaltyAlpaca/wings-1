@@ -1,10 +1,12 @@
 use super::State;
+use crate::config::ProxyWebServer;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod create {
     use crate::{
+        config::ProxyWebServer,
         response::{ApiResponse, ApiResponseResult},
-        routes::{ApiError, api::servers::_server_::GetServer},
+        routes::{ApiError, GetState, api::servers::_server_::GetServer},
     };
     use axum::http::StatusCode;
     use axum::Json;
@@ -16,7 +18,6 @@ mod create {
     use std::path::Path;
     use std::time::Duration;
     use tokio::fs;
-    use tokio::process::Command;
     use utoipa::ToSchema;
 
     #[derive(ToSchema, Deserialize)]
@@ -37,15 +38,119 @@ mod create {
     }
 
     #[derive(ToSchema, Serialize)]
-    struct Response {}
+    struct Response {
+        config_path: String,
+        message: String,
+    }
 
-    /// Obtain a Let's Encrypt certificate using HTTP-01 challenge
+    fn generate_nginx_config(domain: &str, ip: &str, port: &str, ssl: bool, cert_path: Option<&str>, key_path: Option<&str>) -> String {
+        if ssl {
+            let cert = cert_path.unwrap_or("");
+            let key = key_path.unwrap_or("");
+            format!(
+                r#"server {{
+    listen 80;
+    server_name {domain};
+    return 301 https://$server_name$request_uri;
+}}
+
+server {{
+    listen 443 ssl http2;
+    server_name {domain};
+
+    ssl_certificate {cert};
+    ssl_certificate_key {key};
+    ssl_session_cache shared:SSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+    ssl_prefer_server_ciphers on;
+
+    location / {{
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $http_host;
+        proxy_pass http://{ip}:{port};
+    }}
+
+    location /.well-known/acme-challenge/ {{
+        root /var/www/acme-challenge;
+    }}
+}}"#
+            )
+        } else {
+            format!(
+                r#"server {{
+    listen 80;
+    server_name {domain};
+
+    location / {{
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $http_host;
+        proxy_pass http://{ip}:{port};
+    }}
+
+    location /.well-known/acme-challenge/ {{
+        root /var/www/acme-challenge;
+    }}
+}}"#
+            )
+        }
+    }
+
+    fn generate_apache_config(domain: &str, ip: &str, port: &str, ssl: bool, cert_path: Option<&str>, key_path: Option<&str>) -> String {
+        if ssl {
+            let cert = cert_path.unwrap_or("");
+            let key = key_path.unwrap_or("");
+            format!(
+                r#"<VirtualHost *:80>
+    ServerName {domain}
+    Redirect permanent / https://{domain}/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName {domain}
+
+    SSLEngine on
+    SSLCertificateFile {cert}
+    SSLCertificateKeyFile {key}
+    SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1
+
+    ProxyPreserveHost On
+    ProxyPass / http://{ip}:{port}/
+    ProxyPassReverse / http://{ip}:{port}/
+
+    <Location /.well-known/acme-challenge/>
+        ProxyPass !
+        Alias /var/www/acme-challenge/.well-known/acme-challenge/
+    </Location>
+</VirtualHost>"#
+            )
+        } else {
+            format!(
+                r#"<VirtualHost *:80>
+    ServerName {domain}
+
+    ProxyPreserveHost On
+    ProxyPass /.well-known/acme-challenge/ !
+    Alias /.well-known/acme-challenge/ /var/www/acme-challenge/.well-known/acme-challenge/
+    ProxyPass / http://{ip}:{port}/
+    ProxyPassReverse / http://{ip}:{port}/
+</VirtualHost>"#
+            )
+        }
+    }
+
+    fn get_config_path(webserver: ProxyWebServer, domain: &str, port: &str) -> String {
+        match webserver {
+            ProxyWebServer::Nginx => format!("/etc/nginx/sites-available/{}_{}.conf", domain, port),
+            ProxyWebServer::Apache => format!("/etc/apache2/sites-available/{}_{}.conf", domain, port),
+        }
+    }
+
     async fn obtain_lets_encrypt_cert(
         domain: &str,
         email: &str,
         challenge_dir: &str,
     ) -> Result<(String, String), String> {
-        // Create a new ACME account using the builder pattern
         let (account, _credentials) = Account::builder()
             .map_err(|e| format!("Failed to create account builder: {}", e))?
             .create(
@@ -60,16 +165,13 @@ mod create {
             .await
             .map_err(|e| format!("Failed to create ACME account: {}", e))?;
 
-        // Create identifiers for the order
         let identifiers = vec![Identifier::Dns(domain.to_string())];
 
-        // Create a new order for the certificate
         let mut order = account
             .new_order(&NewOrder::new(&identifiers))
             .await
             .map_err(|e| format!("Failed to create order: {}", e))?;
 
-        // Process each authorization using the async iterator
         let mut authorizations = order.authorizations();
         while let Some(authz_result) = authorizations.next().await {
             let mut authz = authz_result
@@ -81,22 +183,18 @@ mod create {
                 _ => return Err("Authorization in unexpected state".to_string()),
             }
 
-            // Get HTTP-01 challenge
             let mut challenge = authz
                 .challenge(ChallengeType::Http01)
                 .ok_or("No HTTP-01 challenge found")?;
 
-            // Get challenge token and key authorization
             let token = challenge.token.clone();
             let key_authorization = challenge.key_authorization();
 
-            // Write challenge response to well-known path
             let challenge_path = format!(
                 "{}/.well-known/acme-challenge/{}",
                 challenge_dir, token
             );
 
-            // Ensure directory exists
             if let Some(parent) = Path::new(&challenge_path).parent() {
                 fs::create_dir_all(parent)
                     .await
@@ -107,36 +205,30 @@ mod create {
                 .await
                 .map_err(|e| format!("Failed to write challenge file: {}", e))?;
 
-            // Notify ACME server that challenge is ready
             challenge
                 .set_ready()
                 .await
                 .map_err(|e| format!("Failed to set challenge ready: {}", e))?;
 
-            // Clean up challenge file after a short delay
             let cleanup_path = challenge_path.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 let _ = fs::remove_file(&cleanup_path).await;
             });
         }
-        // Drop authorizations to release the mutable borrow on order
         drop(authorizations);
 
-        // Wait for order to become ready
         let retry_policy = RetryPolicy::default();
         order
             .poll_ready(&retry_policy)
             .await
             .map_err(|e| format!("Order did not become ready: {}", e))?;
 
-        // Generate CSR and finalize order - finalize() returns the private key PEM
         let private_key_pem = order
             .finalize()
             .await
             .map_err(|e| format!("Failed to finalize order: {}", e))?;
 
-        // Wait for certificate to be issued
         let cert_chain = order
             .poll_certificate(&retry_policy)
             .await
@@ -156,70 +248,29 @@ mod create {
         ),
     ))]
     pub async fn route(
+        state: GetState,
         _server: GetServer,
         Json(data): Json<CreateProxyRequest>,
     ) -> ApiResponseResult {
-        let sites_available = format!(
-            "/etc/nginx/sites-available/{}_{}.conf",
-            data.domain, data.port
-        );
-        let sites_enabled = format!("/etc/nginx/sites-enabled/{}_{}.conf", data.domain, data.port);
+        // Read webserver type from config
+        let webserver = state.config.proxy.webserver;
+        let config_path = get_config_path(webserver, &data.domain, &data.port);
 
-        // Initial HTTP-only config (for ACME challenge or non-SSL)
-        let nginx_config = format!(
-            r#"server {{
-    listen 80;
-    server_name {domain};
-
-    location / {{
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Host $http_host;
-        proxy_pass http://{ip}:{port};
-    }}
-
-    location /.well-known/acme-challenge/ {{
-        root /var/www/acme-challenge;
-    }}
-}}"#,
-            domain = data.domain,
-            ip = data.ip,
-            port = data.port
-        );
-
-        // Write initial config
-        if let Err(e) = fs::write(&sites_available, &nginx_config).await {
-            tracing::error!(
-                "failed to write nginx config {}_{}.conf: {}",
-                data.domain,
-                data.port,
-                e
-            );
-            return ApiResponse::error("Failed to write nginx config")
-                .with_status(StatusCode::INTERNAL_SERVER_ERROR)
-                .ok();
+        // Check if config already exists to prevent accidental overwrites
+        if Path::new(&config_path).exists() {
+            return ApiResponse::error(&format!(
+                "Config already exists at {}. Delete it first before creating a new one.",
+                config_path
+            ))
+            .with_status(StatusCode::CONFLICT)
+            .ok();
         }
 
-        // Create symlink
-        if !Path::new(&sites_enabled).exists() {
-            let _ = Command::new("ln")
-                .args(["-s", &sites_available, &sites_enabled])
-                .output()
-                .await;
-        }
-
-        // Reload nginx
-        let _ = Command::new("systemctl")
-            .args(["reload", "nginx"])
-            .output()
-            .await;
-
-        // Handle SSL
-        if data.ssl {
+        let (cert_path, key_path) = if data.ssl {
             let cert_dir = format!("/srv/server_certs/{}", data.domain);
-            let cert_path = format!("{}/cert.pem", cert_dir);
-            let key_path = format!("{}/key.pem", cert_dir);
+            let cert = format!("{}/cert.pem", cert_dir);
+            let key = format!("{}/key.pem", cert_dir);
 
-            // Create cert directory
             if let Err(e) = fs::create_dir_all(&cert_dir).await {
                 tracing::error!("failed to create cert directory {}: {}", cert_dir, e);
                 return ApiResponse::error("Failed to create certificate directory")
@@ -228,11 +279,9 @@ mod create {
             }
 
             let (cert_pem, key_pem) = if data.use_lets_encrypt {
-                // Use Let's Encrypt
                 let email = data.client_email.as_deref().unwrap_or("admin@example.com");
                 let challenge_dir = "/var/www/acme-challenge";
 
-                // Ensure challenge directory exists
                 if let Err(e) = fs::create_dir_all(challenge_dir).await {
                     tracing::error!("failed to create ACME challenge directory: {}", e);
                     return ApiResponse::error("Failed to create ACME challenge directory")
@@ -241,7 +290,7 @@ mod create {
                 }
 
                 match obtain_lets_encrypt_cert(&data.domain, email, challenge_dir).await {
-                    Ok((cert, key)) => (cert, key),
+                    Ok((c, k)) => (c, k),
                     Err(e) => {
                         tracing::error!("Let's Encrypt certificate request failed: {}", e);
                         return ApiResponse::error(&format!(
@@ -253,9 +302,8 @@ mod create {
                     }
                 }
             } else {
-                // Custom SSL certificates
                 let ssl_cert = match &data.ssl_cert {
-                    Some(cert) => cert.clone(),
+                    Some(c) => c.clone(),
                     None => {
                         return ApiResponse::error("SSL certificate required when ssl=true")
                             .with_status(StatusCode::BAD_REQUEST)
@@ -264,7 +312,7 @@ mod create {
                 };
 
                 let ssl_key = match &data.ssl_key {
-                    Some(key) => key.clone(),
+                    Some(k) => k.clone(),
                     None => {
                         return ApiResponse::error("SSL key required when ssl=true")
                             .with_status(StatusCode::BAD_REQUEST)
@@ -275,93 +323,78 @@ mod create {
                 (ssl_cert, ssl_key)
             };
 
-            // Write certificate files
-            if let Err(e) = fs::write(&cert_path, &cert_pem).await {
-                tracing::error!("failed to write cert {}: {}", cert_path, e);
+            if let Err(e) = fs::write(&cert, &cert_pem).await {
+                tracing::error!("failed to write cert {}: {}", cert, e);
                 return ApiResponse::error("Failed to save certificate")
                     .with_status(StatusCode::INTERNAL_SERVER_ERROR)
                     .ok();
             }
 
-            if let Err(e) = fs::write(&key_path, &key_pem).await {
-                tracing::error!("failed to write key {}: {}", key_path, e);
+            if let Err(e) = fs::write(&key, &key_pem).await {
+                tracing::error!("failed to write key {}: {}", key, e);
                 return ApiResponse::error("Failed to save certificate key")
                     .with_status(StatusCode::INTERNAL_SERVER_ERROR)
                     .ok();
             }
 
-            // SSL nginx config with HTTP redirect
-            let ssl_nginx_config = format!(
-                r#"server {{
-    listen 80;
-    server_name {domain};
-    return 301 https://$server_name$request_uri;
-}}
+            (Some(cert), Some(key))
+        } else {
+            (None, None)
+        };
 
-server {{
-    listen 443 ssl http2;
-    server_name {domain};
+        let config = match webserver {
+            ProxyWebServer::Nginx => generate_nginx_config(
+                &data.domain,
+                &data.ip,
+                &data.port,
+                data.ssl,
+                cert_path.as_deref(),
+                key_path.as_deref(),
+            ),
+            ProxyWebServer::Apache => generate_apache_config(
+                &data.domain,
+                &data.ip,
+                &data.port,
+                data.ssl,
+                cert_path.as_deref(),
+                key_path.as_deref(),
+            ),
+        };
 
-    ssl_certificate {cert_path};
-    ssl_certificate_key {key_path};
-    ssl_session_cache shared:SSL:10m;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
-    ssl_prefer_server_ciphers on;
-
-    location / {{
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Host $http_host;
-        proxy_pass http://{ip}:{port};
-    }}
-
-    location /.well-known/acme-challenge/ {{
-        root /var/www/acme-challenge;
-    }}
-}}"#,
-                domain = data.domain,
-                ip = data.ip,
-                port = data.port,
-                cert_path = cert_path,
-                key_path = key_path
-            );
-
-            // Update nginx config with SSL version
-            if let Err(e) = fs::write(&sites_available, &ssl_nginx_config).await {
-                tracing::error!(
-                    "failed to write SSL nginx config {}_{}.conf: {}",
-                    data.domain,
-                    data.port,
-                    e
-                );
-                return ApiResponse::error("Failed to write SSL nginx config")
-                    .with_status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .ok();
-            }
-
-            // Reload nginx again with SSL config
-            let _ = Command::new("systemctl")
-                .args(["reload", "nginx"])
-                .output()
-                .await;
+        if let Err(e) = fs::write(&config_path, &config).await {
+            tracing::error!("failed to write config {}: {}", config_path, e);
+            return ApiResponse::error("Failed to write webserver config")
+                .with_status(StatusCode::INTERNAL_SERVER_ERROR)
+                .ok();
         }
 
-        ApiResponse::new_serialized(Response {})
-            .with_status(StatusCode::ACCEPTED)
-            .ok()
+        let webserver_name = match webserver {
+            ProxyWebServer::Nginx => "nginx",
+            ProxyWebServer::Apache => "apache2",
+        };
+
+        ApiResponse::new_serialized(Response {
+            config_path: config_path.clone(),
+            message: format!(
+                "Config written. Enable site and reload {} to apply.",
+                webserver_name
+            ),
+        })
+        .with_status(StatusCode::ACCEPTED)
+        .ok()
     }
 }
 
 mod delete {
     use crate::{
+        config::ProxyWebServer,
         response::{ApiResponse, ApiResponseResult},
-        routes::{ApiError, api::servers::_server_::GetServer},
+        routes::{ApiError, GetState, api::servers::_server_::GetServer},
     };
     use axum::http::StatusCode;
     use axum::Json;
     use serde::{Deserialize, Serialize};
     use tokio::fs;
-    use tokio::process::Command;
     use utoipa::ToSchema;
 
     #[derive(ToSchema, Deserialize)]
@@ -371,7 +404,9 @@ mod delete {
     }
 
     #[derive(ToSchema, Serialize)]
-    struct Response {}
+    struct Response {
+        message: String,
+    }
 
     #[utoipa::path(post, path = "/delete", responses(
         (status = ACCEPTED, body = inline(Response)),
@@ -384,44 +419,41 @@ mod delete {
         ),
     ))]
     pub async fn route(
+        state: GetState,
         _server: GetServer,
         Json(data): Json<DeleteProxyRequest>,
     ) -> ApiResponseResult {
-        let sites_available = format!(
-            "/etc/nginx/sites-available/{}_{}.conf",
-            data.domain, data.port
-        );
-        let sites_enabled = format!("/etc/nginx/sites-enabled/{}_{}.conf", data.domain, data.port);
+        let webserver = state.config.proxy.webserver;
 
-        // Remove sites-available config
+        let (sites_available, sites_enabled) = match webserver {
+            ProxyWebServer::Nginx => (
+                format!("/etc/nginx/sites-available/{}_{}.conf", data.domain, data.port),
+                format!("/etc/nginx/sites-enabled/{}_{}.conf", data.domain, data.port),
+            ),
+            ProxyWebServer::Apache => (
+                format!("/etc/apache2/sites-available/{}_{}.conf", data.domain, data.port),
+                format!("/etc/apache2/sites-enabled/{}_{}.conf", data.domain, data.port),
+            ),
+        };
+
         if let Err(e) = fs::remove_file(&sites_available).await {
-            tracing::error!(
-                "failed to remove nginx config sites-available/{}_{}.conf: {}",
-                data.domain,
-                data.port,
-                e
-            );
+            tracing::warn!("failed to remove config {}: {}", sites_available, e);
         }
 
-        // Remove sites-enabled symlink
         if let Err(e) = fs::remove_file(&sites_enabled).await {
-            tracing::error!(
-                "failed to remove nginx config sites-enabled/{}_{}.conf: {}",
-                data.domain,
-                data.port,
-                e
-            );
+            tracing::warn!("failed to remove symlink {}: {}", sites_enabled, e);
         }
 
-        // Reload nginx
-        let _ = Command::new("systemctl")
-            .args(["reload", "nginx"])
-            .output()
-            .await;
+        let webserver_name = match webserver {
+            ProxyWebServer::Nginx => "nginx",
+            ProxyWebServer::Apache => "apache2",
+        };
 
-        ApiResponse::new_serialized(Response {})
-            .with_status(StatusCode::ACCEPTED)
-            .ok()
+        ApiResponse::new_serialized(Response {
+            message: format!("Config removed. Reload {} to apply.", webserver_name),
+        })
+        .with_status(StatusCode::ACCEPTED)
+        .ok()
     }
 }
 

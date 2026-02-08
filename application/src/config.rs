@@ -853,6 +853,17 @@ nestify::nest! {
             pub line_reset_interval: u64,
         },
 
+        #[serde(default)]
+        #[schema(inline)]
+        pub proxy: #[derive(ToSchema, Deserialize, Serialize, DefaultFromSerde, Clone)] #[serde(default)] pub struct Proxy {
+            #[serde(default)]
+            pub webserver: #[derive(ToSchema, Clone, Copy, Deserialize, Serialize, Default, PartialEq)] #[serde(rename_all = "lowercase")] pub enum ProxyWebServer {
+                #[default]
+                Nginx,
+                Apache,
+            },
+        },
+
         pub remote: String,
         #[serde(default)]
         #[schema(inline)]
