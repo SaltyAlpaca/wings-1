@@ -285,7 +285,14 @@ server {{
             }
 
             let (cert_pem, key_pem) = if data.use_lets_encrypt {
-                let email = data.client_email.as_deref().unwrap_or("admin@example.com");
+                let email = match &data.client_email {
+                    Some(e) if !e.is_empty() && e.contains('@') => e.as_str(),
+                    _ => {
+                        return ApiResponse::error("A valid email address is required for Let's Encrypt certificates")
+                            .with_status(StatusCode::BAD_REQUEST)
+                            .ok();
+                    }
+                };
                 let challenge_dir = "/var/www/acme-challenge";
 
                 if let Err(e) = fs::create_dir_all(challenge_dir).await {
