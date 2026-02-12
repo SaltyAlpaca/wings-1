@@ -419,7 +419,9 @@ impl BackupExt for DdupBakBackup {
                         )?;
                     }
 
-                    zip.finish()?;
+                    let mut inner = zip.finish()?.into_inner();
+                    inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
@@ -446,6 +448,9 @@ impl BackupExt for DdupBakBackup {
                     }
 
                     tar.finish()?;
+                    let mut inner = tar.into_inner()?.finish()?;
+                    inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });

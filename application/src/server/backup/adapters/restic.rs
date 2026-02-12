@@ -662,6 +662,10 @@ impl BackupExt for ResticBackup {
                         }
                     }
 
+                    let mut inner = archive.finish()?.into_inner();
+                    inner.flush()?;
+                    inner.shutdown()?;
+
                     Ok(())
                 });
             }
@@ -698,7 +702,9 @@ impl BackupExt for ResticBackup {
                         );
                     }
 
-                    writer.finish()?;
+                    let mut inner = writer.finish()?;
+                    inner.flush()?;
+                    inner.shutdown()?;
 
                     Ok(())
                 });
