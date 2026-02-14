@@ -131,6 +131,12 @@ pub async fn handle_ws(
                             );
                             break;
                         }
+                        Err(websocket::jwt::JwtError::Expired) => {
+                            tracing::debug!(
+                                server = %server.uuid,
+                                "jwt expired on websocket, ignoring",
+                            );
+                        }
                         Err(websocket::jwt::JwtError::Misc(err)) => {
                             tracing::error!(
                                 server = %server.uuid,

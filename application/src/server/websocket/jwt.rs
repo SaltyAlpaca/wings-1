@@ -7,6 +7,7 @@ use compact_str::ToCompactString;
 
 pub enum JwtError {
     CloseSocket,
+    Expired,
     Misc(anyhow::Error),
 }
 
@@ -82,7 +83,7 @@ pub async fn handle_jwt(
                                 ))
                                 .await;
 
-                            return Err(JwtError::Misc(anyhow::anyhow!("JWT expired")));
+                            return Err(JwtError::Expired);
                         }
 
                         return Err(JwtError::CloseSocket);

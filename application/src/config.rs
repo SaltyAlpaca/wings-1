@@ -1390,7 +1390,7 @@ impl Config {
                     message,
                 }) if status_code == 403 && message.contains("Pool overlaps") => {
                     tracing::warn!(
-                        "a docker network with the same name already exists, but it overlaps with another network. automatically incrementing interface, pool subnet and gateway by 1 and trying again..."
+                        "the docker network overlaps with another network. automatically incrementing interface, pool subnet and gateway by 1 and trying again..."
                     );
 
                     let mut attempts = 0;
